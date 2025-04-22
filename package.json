@@ -1,0 +1,24 @@
+{
+  "name": "whiteboard",
+  "version": "1.0.0",
+  "description": "An efficient real time dashboard for poor connection environments.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "test"
+  },
+  "keywords": [
+    "dashboard",
+    "javascript",
+    "node",
+    "websockets",
+    "armandodev"
+  ],
+  "author": "Armando Peña Tamayo (ArmandoDev)",
+  "license": "ISC",
+  "dependencies": {
+    "express": "5.1.0",
+    "ws": "8.18.1"
+  }
+}
