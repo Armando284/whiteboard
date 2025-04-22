@@ -1,0 +1,15 @@
+* {
+  margin: none;
+  padding: none;
+  box-sizing: border-box;
+}
+
+body {
+  width: 100dvw;
+  min-height: 100dvh;
+  background: #333;
+}
+
+canvas {
+  outline: 1px solid #333;
+}
