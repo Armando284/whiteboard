@@ -123,6 +123,16 @@ canvas.onpointerup = canvas.onpointerout = () => {
   scheduleSend(); // Enviar los últimos cambios
 };
 
+// Prevenir gestos táctiles que interfieren con el dibujo
+document.addEventListener('touchmove', (e) => {
+  if (isDrawing) {
+    e.preventDefault(); // Bloquea el desplazamiento mientras se dibuja
+  }
+}, { passive: false });
+
+// También previene el "pull-to-refresh" en Safari
+document.body.style.overscrollBehaviorY = 'contain';
+
 function decompressRLE(compressedBuffer) {
   const view = new Uint8Array(compressedBuffer);
   const decompressed = new Uint8Array(BUFFER_SIZE);
