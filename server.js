@@ -1,6 +1,6 @@
 const express = require('express');
 const http = require('http');
-const { WebSocketServer } = require('ws');
+const { WebSocketServer, WebSocket } = require('ws');
 const path = require('path');
 
 const app = express();
@@ -21,8 +21,9 @@ const CANVAS_HEIGHT = 600;
 const BUFFER_SIZE = Math.ceil((CANVAS_WIDTH * CANVAS_HEIGHT) / 8); // Tamaño en bytes
 
 // Estado global del canvas (inicializado en 0s)
-let canvasBuffer = new ArrayBuffer(BUFFER_SIZE);
-let canvasView = new Uint8Array(canvasBuffer);
+let serverCanvasBuffer = new ArrayBuffer(BUFFER_SIZE);
+let serverCanvasView = new Uint8Array(serverCanvasBuffer);
+serverCanvasView.fill(0); // Inicializar en blanco
 
 // Función de compresión RLE simple (bytes → [valor, repeticiones])
 function compressRLE(buffer) {
@@ -40,7 +41,7 @@ function compressRLE(buffer) {
     }
   }
   compressed.push(current, count);
-  return new Uint8Array(compressed);
+  return Buffer.from(compressed); // Para Node.js
 }
 
 // Keep-alive endpoint
@@ -51,11 +52,8 @@ wss.on('connection', (ws, req) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log(`🟢 Nueva conexión WS desde ${ip}`);
   // 1. Enviar canvas comprimido al nuevo cliente
-  const compressed = compressRLE(canvasView.buffer);
-  const fullCanvasMsg = new Uint8Array(compressed.byteLength + 1);
-  fullCanvasMsg[0] = 0xFF; // Tipo: canvas completo
-  fullCanvasMsg.set(new Uint8Array(compressed), 1);
-  ws.send(fullCanvasMsg.buffer, { binary: true });
+  const compressed = compressRLE(serverCanvasView);
+  ws.send(compressed);
 
 
   // Manejar errores de conexión
@@ -77,26 +75,17 @@ wss.on('connection', (ws, req) => {
 
   // Manejar mensajes
   ws.on('message', (data) => {
-    // Convertir Buffer de Node.js a ArrayBuffer
-    const arrayBuffer = data.buffer.slice(
-      data.byteOffset,
-      data.byteOffset + data.byteLength
-    );
-    const view = new DataView(arrayBuffer);
-    const x = view.getUint16(0);
-    const y = view.getUint16(2);
-    const type = view.getUint8(4);
+    // Actualizar el buffer del servidor
+    const clientView = new Uint8Array(data);
+    for (let i = 0; i < clientView.length; i++) {
+      serverCanvasView[i] = clientView[i]; // Overwrite (no OR)
+    }
 
-    // Calcular posición del bit correspondiente a (x,y)
-    const bitIndex = y * CANVAS_WIDTH + x;
-    const byteIndex = Math.floor(bitIndex / 8);
-    const bitMask = 1 << (bitIndex % 8);
-
-    // Actualizar el canvas (1 = píxel negro)
-    canvasView[byteIndex] |= bitMask;
+    // Re-comprimir y broadcast
+    const compressedUpdate = compressRLE(serverCanvasView);
     wss.clients.forEach(client => {
-      if (client.readyState === ws.OPEN && client !== ws) {
-        client.send(data);
+      if (client !== ws && client.readyState === WebSocket.OPEN) {
+        client.send(compressedUpdate);
       }
     });
   });
