@@ -8,18 +8,26 @@
   --large-space: 24px;
   --medium-space: 12px;
   --small-space: 6px;
+  --bg-primary-color: #f9f7f3;
+  --bg-secondary-color: #ffffff;
+  --text-primary-color: #00171f;
+  --text-secondary-color: #003459;
+  --text-tertiary-color: #c9d6df;
+  --cta-color: #a71d31;
+  --cta-active-color: #3f0d12;
 }
 
 body {
   width: 100dvw;
   min-height: 100dvh;
-  background: #0c0b0b;
+  background: var(--bg-secondary-color);
   display: flex;
   justify-content: center;
 }
 
 main {
-  background: #333;
+  background: var(--bg-primary-color);
+  color: var(--text-secondary-color);
   padding: var(--large-space) var(--medium-space);
   display: flex;
   flex-direction: column;
@@ -28,8 +36,13 @@ main {
   gap: var(--large-space);
 }
 
+header {
+  text-align: center;
+}
+
 h1 {
   text-transform: uppercase;
+  color: var(--text-primary-color);
 }
 
 canvas {
@@ -48,8 +61,27 @@ button {
   border-radius: var(--small-space);
   border: none;
   outline: none;
+  background: var(--cta-color);
+  color: var(--bg-primary-color);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 1.10px;
+  cursor: pointer;
+  transition: background 0.3s ease-in-out;
+
+  &:hover {
+    background: var(--cta-active-color);
+  }
+
+  &:active {
+    background: var(--text-primary-color);
+  }
 }
 
 footer {
+  width: 100%;
   margin-top: auto;
+  padding-top: var(--medium-space);
+  text-align: center;
+  border-top: var(--text-tertiary-color) 1px solid;
 }
