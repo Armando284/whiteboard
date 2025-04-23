@@ -1,13 +1,25 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Pizarra Low-Bandwidth</title>
+    <title>Whiteboard Low-Bandwidth</title>
     <meta name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="style.css">
+    <script src="app.js" type="module"></script>
   </head>
   <body>
-    <canvas id="pizarra" width="800" height="600"></canvas>
-    <script src="app.js" type="module"></script>
+    <main>
+      <header>
+        <h1>Whiteboard</h1>
+      </header>
+      <canvas id="pizarra" width="800" height="600"></canvas>
+      <section class="button-group">
+        <button id="clear-canvas">Clear</button>
+      </section>
+      <footer>
+        Made by @Armando
+        <time datetime="4/22/2025">4/22/2025</time>
+      </footer>
+    </main>
   </body>
 </html>

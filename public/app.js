@@ -1,5 +1,6 @@
 const canvas = document.getElementById('pizarra');
 const ctx = canvas.getContext('2d');
+const $clearCanvas = document.querySelector('#clear-canvas');
 
 let ws;
 
@@ -168,4 +169,12 @@ function redrawCanvas() {
   }
 
   ctx.putImageData(imageData, 0, 0);
+}
+
+$clearCanvas.onclick = (e) => {
+  e.stopPropagation()
+  e.preventDefault()
+  canvasView.fill(0)
+  scheduleSend(); // Programar envío
+  redrawCanvas()
 }
