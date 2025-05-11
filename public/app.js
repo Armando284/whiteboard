@@ -1,3 +1,5 @@
+'use strict';
+
 const canvas = document.getElementById('pizarra');
 const ctx = canvas.getContext('2d');
 const $clearCanvas = document.querySelector('#clear-canvas');
@@ -27,7 +29,9 @@ const debug = (isMobile, x, y) => {
   $debug.innerText = `isMobile?: ${isMobile}; x: ${x}, y: ${y}`
 }
 
-// Función para conectar/reconectar WebSocket
+/**
+ * Connects and reconnects web sockets
+ */
 function connectWebSocket() {
   const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
   ws = new WebSocket(`${protocol}${window.location.host}`);
@@ -44,14 +48,13 @@ function connectWebSocket() {
       console.log('Connected users', e.data)
       $activeConnections.innerText = e.data
     }
-    // Asegúrate de que los datos son un ArrayBuffer
     else if (!(e.data instanceof ArrayBuffer)) {
-      console.error("Mensaje recibido no es binario:", e.data);
+      console.error("Resived data is not binary array:", e.data);
       return;
     }
     const decompressed = decompressRLE(e.data);
-    canvasView.set(decompressed); // Actualizar el buffer local
-    redrawCanvas(); // Volver a renderizar
+    canvasView.set(decompressed); // Updates local buffer
+    redrawCanvas();
   };
 
   ws.onerror = (error) => {
@@ -59,25 +62,25 @@ function connectWebSocket() {
   };
 
   ws.onclose = (e) => {
-    console.log('Conexión WS cerrada. Intentando reconectar...');
-    setTimeout(connectWebSocket, 2000); // Reconexión automática
+    console.log('Conection WS closed. Reconnecting...');
+    setTimeout(connectWebSocket, 2000); // Automatic reconnection
   };
 }
 
-// Iniciar conexión
+// Start connection
 connectWebSocket();
 
-// Configuración
+// Configuration
 const CANVAS_WIDTH = 800;
 const CANVAS_HEIGHT = 600;
-const BYTES_PER_PIXEL_ROW = Math.ceil(CANVAS_WIDTH / 8); // 100 bytes por fila
+const BYTES_PER_PIXEL_ROW = Math.ceil(CANVAS_WIDTH / 8); // 100 bytes per row
 const BUFFER_SIZE = BYTES_PER_PIXEL_ROW * CANVAS_HEIGHT; // 60,000 bytes
 
-// Estado del canvas (1 bit por pixel)
+// Canvas state (1 bit per pixel)
 let canvasBuffer = new ArrayBuffer(BUFFER_SIZE);
 let canvasView = new Uint8Array(canvasBuffer);
 
-// Inicializar a blanco (todos los bits en 0)
+// Initialice canvas to white (all bits to 0)
 canvasView.fill(0);
 
 function setPixel(x, y, isBlack) {
@@ -86,9 +89,9 @@ function setPixel(x, y, isBlack) {
   const bitOffset = bitIndex % 8;
 
   if (isBlack) {
-    canvasView[byteIndex] |= (1 << bitOffset); // Set bit a 1
+    canvasView[byteIndex] |= (1 << bitOffset); // Set bit to 1
   } else {
-    canvasView[byteIndex] &= ~(1 << bitOffset); // Set bit a 0
+    canvasView[byteIndex] &= ~(1 << bitOffset); // Set bit to 0
   }
 }
 
@@ -97,17 +100,21 @@ let sendTimeout;
 function scheduleSend() {
   clearTimeout(sendTimeout);
   sendTimeout = setTimeout(() => {
-    ws.send(canvasView.buffer); // Enviar ArrayBuffer directamente
+    ws.send(canvasView.buffer); // Send ArrayBuffer directly
   }, 300);
 }
 
-// Llamar esta función cada vez que se dibuje
-// Variables para rastrear el estado del dibujo
 let lastX = 0;
 let lastY = 0;
 let isDrawing = false;
 
-// Función para dibujar una línea entre dos puntos (algoritmo de Bresenham)
+/**
+ * Draws a line between two points (Bresenham algorithim)
+ * @param {number} x0 
+ * @param {number} y0 
+ * @param {number} x1 
+ * @param {number} y1 
+ */
 function drawLine(x0, y0, x1, y1) {
 
   let [_x0, _y0, _x1, _y1] = [Math.floor(x0), Math.floor(y0), Math.floor(x1), Math.floor(y1)]
@@ -128,6 +135,11 @@ function drawLine(x0, y0, x1, y1) {
   }
 }
 
+/**
+ * Gets normalized [x, y] position relative to canvas and pencil pointer.
+ * @param {PointerEvent | Touch} touch 
+ * @returns {[number, number]}
+ */
 function getPointerPos(touch) {
   const rect = canvas.getBoundingClientRect();
 
@@ -144,15 +156,15 @@ function getPointerPos(touch) {
   return [(touch.clientX - rect.left) * mult.x, (touch.clientY - rect.top) * mult.y];
 }
 
-// Prevenir gestos táctiles que interfieren con el dibujo
+// Stops page touches and gestures to interfiere with drawing.
 document.addEventListener('touchmove', (e) => {
   if (isDrawing) {
-    e.preventDefault(); // Bloquea el desplazamiento mientras se dibuja
+    e.preventDefault(); // Stops scrolling while drawing.
   }
 }, { passive: false });
 
 if (isMobile) {
-  canvas.style.touchAction = 'none'; // Deshabilita gestos en el canvas
+  canvas.style.touchAction = 'none'; // Stops gestures inside canvas.
 
   canvas.addEventListener('touchstart', (e) => {
     e.preventDefault();
@@ -173,7 +185,7 @@ if (isMobile) {
     drawLine(lastX, lastY, x, y);
     [lastX, lastY] = [x, y];
     scheduleSend();
-    redrawCanvas(); // Renderizado diferido en móviles
+    redrawCanvas();
 
   }, { passive: false });
 
@@ -182,19 +194,18 @@ if (isMobile) {
     scheduleSend();
   });
 } else {
-  // Manejadores de eventos de dibujo
   canvas.onpointerdown = (e) => {
 
     [lastX, lastY] = getPointerPos(e)
     isDrawing = true;
-    setPixel(lastX, lastY, true); // Marcar el punto inicial
+    setPixel(lastX, lastY, true);
   };
 
   canvas.onpointermove = (e) => {
     if (!isDrawing) return;
     const [x, y] = getPointerPos(e)
 
-    // Optimización para móviles: reducir frecuencia de actualización
+    // Optimization: reduces update frecuency.
     if (isMobile && Date.now() - lastDrawTime < 50) return;
     lastDrawTime = Date.now();
 
@@ -202,12 +213,12 @@ if (isMobile) {
     [lastX, lastY] = [x, y];
 
     scheduleSend();
-    redrawCanvas(); // Renderizado diferido en móviles
+    redrawCanvas();
   };
 
   canvas.onpointerup = canvas.onpointerout = () => {
     isDrawing = false;
-    scheduleSend(); // Enviar los últimos cambios
+    scheduleSend();
   };
 }
 
@@ -259,6 +270,6 @@ $clearCanvas.onclick = (e) => {
   e.preventDefault()
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvasView.fill(0)
-  scheduleSend(); // Programar envío
+  scheduleSend();
   redrawCanvas()
 }
