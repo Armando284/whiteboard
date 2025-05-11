@@ -15,17 +15,22 @@
   --text-tertiary-color: #c9d6df;
   --cta-color: #a71d31;
   --cta-active-color: #3f0d12;
+
+  --debug-display: flex;
 }
 
 body {
-  width: 100dvw;
-  min-height: 100dvh;
+  overscroll-behavior-y: contain;
+  overflow-x: hidden;
+  /* position: fixed; */
+  width: 100%;
   background: var(--bg-secondary-color);
   display: flex;
   justify-content: center;
 }
 
 main {
+  min-height: 100dvh;
   background: var(--bg-primary-color);
   color: var(--text-secondary-color);
   padding: var(--large-space) var(--medium-space);
@@ -45,24 +50,50 @@ h1 {
   color: var(--text-primary-color);
 }
 
+#information {
+  width: 100%;
+  display: flex;
+  justify-content: end;
+  align-items: center;
+  gap: var(--small-space);
+
+  &>div {
+    display: flex;
+    align-items: center;
+    gap: var(--small-space);
+    font-size: small;
+
+    svg {
+      width: 20px;
+      height: 20px;
+    }
+  }
+}
+
 canvas {
-  outline: 1px solid #333;
+  outline: 2px solid var(--text-secondary-color);
+  display: block;
+  width: 100%;
+  max-width: 800px;
+  height: auto;
+  aspect-ratio: 800/600;
+  touch-action: none;
 }
 
 .button-group {
   width: 100%;
   display: flex;
-  justify-content: end;
+  justify-content: start;
 }
 
 button {
-  min-width: 128px;
+  min-width: 44px;
   height: 44px;
   border-radius: var(--small-space);
-  border: none;
+  border: 1px solid var(--cta-color);
   outline: none;
-  background: var(--cta-color);
-  color: var(--bg-primary-color);
+  background: transparent;
+  color: var(--cta-color);
   text-transform: uppercase;
   font-weight: 700;
   letter-spacing: 1.10px;
@@ -70,11 +101,13 @@ button {
   transition: background 0.3s ease-in-out;
 
   &:hover {
-    background: var(--cta-active-color);
+    background: var(--cta-color);
+    color: var(--bg-primary-color);
   }
 
   &:active {
-    background: var(--text-primary-color);
+    background: var(--cta-active-color);
+    color: var(--bg-primary-color);
   }
 }
 
@@ -84,4 +117,20 @@ footer {
   padding-top: var(--medium-space);
   text-align: center;
   border-top: var(--text-tertiary-color) 1px solid;
+}
+
+#debug {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  min-width: 128px;
+  height: 56px;
+  border-radius: 6px;
+  padding: 12px;
+  background: rgba(0, 0, 0, .7);
+  color: #fff;
+  display: var(--debug-display);
+  justify-content: start;
+  align-items: center;
+  z-index: 10;
 }

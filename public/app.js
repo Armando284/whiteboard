@@ -1,8 +1,31 @@
 const canvas = document.getElementById('pizarra');
 const ctx = canvas.getContext('2d');
 const $clearCanvas = document.querySelector('#clear-canvas');
-
 let ws;
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+let lastDrawTime = 0;
+
+/**
+ * @type {HTMLSpanElement}
+ */
+const $activeConnections = document.querySelector('#active-connections>span')
+
+const IS_DEBUG = false
+/**
+ * @type {HTMLElement}
+*/
+const $debug = document.querySelector('#debug')
+$debug.style.setProperty('--debug-display', IS_DEBUG ? 'flex' : 'none')
+/**
+ * 
+ * @param {boolean} isMobile 
+ * @param {number} x 
+ * @param {number} y 
+ */
+const debug = (isMobile, x, y) => {
+  if (!IS_DEBUG) return
+  $debug.innerText = `isMobile?: ${isMobile}; x: ${x}, y: ${y}`
+}
 
 // Función para conectar/reconectar WebSocket
 function connectWebSocket() {
@@ -17,8 +40,12 @@ function connectWebSocket() {
   };
 
   ws.onmessage = (e) => {
+    if (typeof e.data === 'string') {
+      console.log('Connected users', e.data)
+      $activeConnections.innerText = e.data
+    }
     // Asegúrate de que los datos son un ArrayBuffer
-    if (!(e.data instanceof ArrayBuffer)) {
+    else if (!(e.data instanceof ArrayBuffer)) {
       console.error("Mensaje recibido no es binario:", e.data);
       return;
     }
@@ -82,47 +109,40 @@ let isDrawing = false;
 
 // Función para dibujar una línea entre dos puntos (algoritmo de Bresenham)
 function drawLine(x0, y0, x1, y1) {
-  const dx = Math.abs(x1 - x0);
-  const dy = Math.abs(y1 - y0);
-  const sx = (x0 < x1) ? 1 : -1;
-  const sy = (y0 < y1) ? 1 : -1;
+
+  let [_x0, _y0, _x1, _y1] = [Math.floor(x0), Math.floor(y0), Math.floor(x1), Math.floor(y1)]
+  debug(isMobile, _x1, _y1)
+  const dx = Math.abs(_x1 - _x0);
+  const dy = Math.abs(_y1 - _y0);
+  const sx = (_x0 < _x1) ? 1 : -1;
+  const sy = (_y0 < _y1) ? 1 : -1;
   let err = dx - dy;
 
   while (true) {
-    setPixel(x0, y0, true); // Dibujar el píxel actual
+    setPixel(_x0, _y0, true); // Dibujar el píxel actual
 
-    if (x0 === x1 && y0 === y1) break;
+    if (_x0 === _x1 && _y0 === _y1) break;
     const e2 = 2 * err;
-    if (e2 > -dy) { err -= dy; x0 += sx; }
-    if (e2 < dx) { err += dx; y0 += sy; }
+    if (e2 > -dy) { err -= dy; _x0 += sx; }
+    if (e2 < dx) { err += dx; _y0 += sy; }
   }
 }
 
-// Manejadores de eventos de dibujo
-canvas.onpointerdown = (e) => {
+function getPointerPos(touch) {
   const rect = canvas.getBoundingClientRect();
-  [lastX, lastY] = [e.clientX - rect.left, e.clientY - rect.top];
-  isDrawing = true;
-  setPixel(lastX, lastY, true); // Marcar el punto inicial
-};
 
-canvas.onpointermove = (e) => {
-  if (!isDrawing) return;
-  const rect = canvas.getBoundingClientRect();
-  const [x, y] = [e.clientX - rect.left, e.clientY - rect.top];
+  const mult = isMobile ?
+    {
+      x: 800 / rect.width,
+      y: 600 / rect.height
+    } :
+    {
+      x: 1,
+      y: 1
+    };
 
-  // Dibujar línea desde el último punto al actual
-  drawLine(lastX, lastY, x, y);
-  [lastX, lastY] = [x, y]; // Actualizar el último punto
-
-  scheduleSend(); // Programar envío
-  redrawCanvas(); // Redibujar
-};
-
-canvas.onpointerup = canvas.onpointerout = () => {
-  isDrawing = false;
-  scheduleSend(); // Enviar los últimos cambios
-};
+  return [(touch.clientX - rect.left) * mult.x, (touch.clientY - rect.top) * mult.y];
+}
 
 // Prevenir gestos táctiles que interfieren con el dibujo
 document.addEventListener('touchmove', (e) => {
@@ -131,8 +151,65 @@ document.addEventListener('touchmove', (e) => {
   }
 }, { passive: false });
 
-// También previene el "pull-to-refresh" en Safari
-document.body.style.overscrollBehaviorY = 'contain';
+if (isMobile) {
+  canvas.style.touchAction = 'none'; // Deshabilita gestos en el canvas
+
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    [lastX, lastY] = getPointerPos(e.touches[0])
+    console.log(lastX, lastY)
+    isDrawing = true;
+    setPixel(lastX, lastY, true);
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const [x, y] = getPointerPos(e.touches[0]);
+
+    if (Date.now() - lastDrawTime < 50) return;
+    lastDrawTime = Date.now();
+
+    drawLine(lastX, lastY, x, y);
+    [lastX, lastY] = [x, y];
+    scheduleSend();
+    redrawCanvas(); // Renderizado diferido en móviles
+
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', () => {
+    isDrawing = false;
+    scheduleSend();
+  });
+} else {
+  // Manejadores de eventos de dibujo
+  canvas.onpointerdown = (e) => {
+
+    [lastX, lastY] = getPointerPos(e)
+    isDrawing = true;
+    setPixel(lastX, lastY, true); // Marcar el punto inicial
+  };
+
+  canvas.onpointermove = (e) => {
+    if (!isDrawing) return;
+    const [x, y] = getPointerPos(e)
+
+    // Optimización para móviles: reducir frecuencia de actualización
+    if (isMobile && Date.now() - lastDrawTime < 50) return;
+    lastDrawTime = Date.now();
+
+    drawLine(lastX, lastY, x, y);
+    [lastX, lastY] = [x, y];
+
+    scheduleSend();
+    redrawCanvas(); // Renderizado diferido en móviles
+  };
+
+  canvas.onpointerup = canvas.onpointerout = () => {
+    isDrawing = false;
+    scheduleSend(); // Enviar los últimos cambios
+  };
+}
 
 function decompressRLE(compressedBuffer) {
   const view = new Uint8Array(compressedBuffer);
@@ -168,12 +245,19 @@ function redrawCanvas() {
     }
   }
 
-  ctx.putImageData(imageData, 0, 0);
+  if (isMobile) {
+    requestAnimationFrame(() => {
+      ctx.putImageData(imageData, 0, 0);
+    });
+  } else {
+    ctx.putImageData(imageData, 0, 0);
+  }
 }
 
 $clearCanvas.onclick = (e) => {
   e.stopPropagation()
   e.preventDefault()
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvasView.fill(0)
   scheduleSend(); // Programar envío
   redrawCanvas()

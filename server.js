@@ -50,20 +50,21 @@ app.get('/ping', (req, res) => res.send('pong'));
 // Configuración detallada de WebSocket
 wss.on('connection', (ws, req) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  console.log(`🟢 Nueva conexión WS desde ${ip}`);
+  console.log(`🟢 New WS connection from: ${ip}`);
   // 1. Enviar canvas comprimido al nuevo cliente
   const compressed = compressRLE(serverCanvasView);
+  ws.send(wss.clients.size)
   ws.send(compressed);
 
 
   // Manejar errores de conexión
   ws.on('error', (error) => {
-    console.error(`🔴 Error en WS (${ip}): ${error.message}`);
+    console.error(`🔴 Error @ WS (${ip}): ${error.message}`);
   });
 
   // Cierre de conexión
   ws.on('close', () => {
-    console.log(`⚫ Conexión cerrada (${ip})`);
+    console.log(`⚫ Connection closed (${ip})`);
   });
 
   // Enviar latido periódico
@@ -83,6 +84,7 @@ wss.on('connection', (ws, req) => {
 
     // Re-comprimir y broadcast
     const compressedUpdate = compressRLE(serverCanvasView);
+
     wss.clients.forEach(client => {
       if (client !== ws && client.readyState === WebSocket.OPEN) {
         client.send(compressedUpdate);
