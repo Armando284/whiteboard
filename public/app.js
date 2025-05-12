@@ -40,12 +40,11 @@ function connectWebSocket() {
   ws.binaryType = 'arraybuffer';
 
   ws.onopen = () => {
-    console.log('Conexión WS establecida');
+    console.log('Conection WS started');
   };
 
   ws.onmessage = (e) => {
     if (typeof e.data === 'string') {
-      console.log('Connected users', e.data)
       $activeConnections.innerText = e.data
       return
     }
