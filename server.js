@@ -47,18 +47,33 @@ function compressRLE(buffer) {
 // Keep-alive endpoint
 app.get('/ping', (req, res) => res.send('pong'));
 
+/**
+ * 
+ * @param {WebSocket} selfWs 
+ * @param {number | Buffer<ArrayBuffer>} message 
+ */
+function broadcast(selfWs, message) {
+  wss.clients.forEach(client => {
+    if (client !== selfWs && client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
+
 wss.on('connection', (ws, req) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   console.log(`🟢 New WS connection from: ${ip}`);
   const compressed = compressRLE(serverCanvasView);
   ws.send(wss.clients.size)
   ws.send(compressed);
+  broadcast(ws, wss.clients.size)
 
   ws.on('error', (error) => {
     console.error(`🔴 Error @ WS (${ip}): ${error.message}`);
   });
 
   ws.on('close', () => {
+    broadcast(ws, wss.clients.size)
     console.log(`⚫ Connection closed (${ip})`);
   });
 
@@ -76,15 +91,11 @@ wss.on('connection', (ws, req) => {
 
     const compressedUpdate = compressRLE(serverCanvasView);
 
-    wss.clients.forEach(client => {
-      if (client !== ws && client.readyState === WebSocket.OPEN) {
-        client.send(compressedUpdate);
-      }
-    });
+    broadcast(ws, compressedUpdate)
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Servidor en puerto ${PORT}`);
+  console.log(`🚀 Server running on port: ${PORT}`);
 });

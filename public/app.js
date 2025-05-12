@@ -47,6 +47,7 @@ function connectWebSocket() {
     if (typeof e.data === 'string') {
       console.log('Connected users', e.data)
       $activeConnections.innerText = e.data
+      return
     }
     else if (!(e.data instanceof ArrayBuffer)) {
       console.error("Resived data is not binary array:", e.data);
