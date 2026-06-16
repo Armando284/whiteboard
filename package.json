@@ -1,27 +1,27 @@
 {
-  "name": "whiteboard",
-  "version": "1.0.0",
-  "description": "An efficient real time dashboard for poor connection environments.",
-  "main": "index.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "test"
-  },
-  "keywords": [
-    "dashboard",
-    "javascript",
-    "node",
-    "websockets",
-    "armandodev"
-  ],
-  "author": "Armando Peña Tamayo (ArmandoDev)",
-  "license": "ISC",
-  "engines": {
-    "node": "14.x"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.16.0"
-  }
+	"name": "whiteboard",
+	"version": "1.0.0",
+	"description": "An efficient real time dashboard for poor connection environments.",
+	"main": "index.js",
+	"scripts": {
+		"start": "node server.js",
+		"dev": "node --watch server.js",
+		"test": "test"
+	},
+	"keywords": [
+		"dashboard",
+		"javascript",
+		"node",
+		"websockets",
+		"armandodev"
+	],
+	"author": "Armando Peña Tamayo (ArmandoDev)",
+	"license": "ISC",
+	"engines": {
+		"node": "24.x"
+	},
+	"dependencies": {
+		"express": "^4.18.2",
+		"ws": "^8.16.0"
+	}
 }
