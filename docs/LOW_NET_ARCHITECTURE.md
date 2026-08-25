@@ -309,7 +309,7 @@ Honesty note: WebSockets run over TCP, so "packet loss" manifests as latency spi
 | 3 ✅ | Metrics: NetworkMetrics accounting (bytes by category, msg/s rates, RTT EMA), toolbar button + right-side card (auto-opens with `?debug=1`) | Measurement before optimization |
 | 4 ✅ | Protocol v1: server-side version gate, per-room seq + client gap detection, err surfacing, NETWORK_PROTOCOL.md | Documented, enforced wire contract |
 | 5 ✅ | Avatar prototype (camera→tracking→quantize→binary→WS→interpolation→render) | Playable avatar |
-| 6 | Optimization experiments (Hz sweep, thresholds, delta encoding) | Measured avatar bandwidth curve |
+| 6 ✅ | Avatar optimization: deadband suppression + keepalives, Hz/deadband knobs (`?avhz`/`?avdb`), deterministic sweep bench | Measured avatar bandwidth curve (`BANDWIDTH_AVATAR.md`) |
 | 7 | Audio research/prototype (WebRTC+Opus, getStats measurement) | Measured audio bitrate |
 | 8 | Network simulator (bw/latency/loss/jitter) | Reproducible dev harness |
 | 9 | Real-world test ~120 kbps | BANDWIDTH_REPORT.md with real numbers |

@@ -107,8 +107,9 @@ let avatarManagerPromise = null;
 /** Loads the avatar module (MediaPipe etc.) only on first use. */
 function loadAvatarManager() {
   if (!avatarManagerPromise) {
-    avatarManagerPromise = import('./avatar/avatar.js').then(({ AvatarManager }) => {
-      const mgr = new AvatarManager(conn, {});
+    avatarManagerPromise = import('./avatar/avatar.js').then(({ AvatarManager, avatarConfigFromURL }) => {
+      const cfg = avatarConfigFromURL(new URLSearchParams(location.search));
+      const mgr = new AvatarManager(conn, cfg);
       mgr.myUid = uid;
       avatarManager = mgr;
       return mgr;

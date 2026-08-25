@@ -40,6 +40,7 @@ throttled networks; afterwards it is HTTP-cached.
 | 9 | Bandwidth budget | Open stats card with both avatars on | "Avatar traffic" climbs ≈150–160 B/s per active avatar; board/control rows unaffected |
 | 10 | Model download once | Reload page, re-enable avatar | Second load starts tracking quickly (model cached), no re-download spike in Network tab |
 | 11 | Board coexistence | Draw while avatars are on | Drawing latency/rendering unaffected; strokes keep converging as usual |
+| 12 | Experiment knobs | Reload with `?avhz=4&avdb=0.06`, enable avatar | Tracking visibly choppier; stats card "Avatar traffic" drops towards the `BANDWIDTH_AVATAR.md` table values; idle cost stays ≈37 B/s |
 
 ## Edge cases
 

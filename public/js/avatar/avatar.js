@@ -18,11 +18,32 @@ import {
   encodeAvatarFrame,
   parseRelayFrame,
 } from './codec.js';
+import { PoseThrottle } from './optimize.js';
 import { envelope } from '../net/protocol.js';
 
 const TRACK_HZ = 12;
 const SMOOTH_RATE = 18; // higher = snappier interpolation
 const REMOTE_TTL_MS = 5000;
+
+/**
+ * Experiment knobs via query string (phase 6):
+ *   ?avhz=8   → tracking/send rate, clamped to [2, 30]
+ *   ?avdb=0.1 → deadband as fraction of each axis range; 0 disables suppression
+ * @param {URLSearchParams} params
+ */
+export function avatarConfigFromURL(params) {
+  const clamp = (v, lo, hi, dflt) => {
+    const n = Number(params.get(v));
+    return Number.isFinite(n) && n >= lo && n <= hi ? n : dflt;
+  };
+  const db = clamp('avdb', 0, 1, NaN);
+  return {
+    hz: clamp('avhz', 2, 30, TRACK_HZ),
+    // Angle range is ±80° ≈ 2.79 rad; epsAngle expressed on the same 0..1 scale.
+    epsShape: Number.isNaN(db) ? undefined : db,
+    epsAngle: Number.isNaN(db) ? undefined : db,
+  };
+}
 
 const MEDIAPIPE_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const MODEL_URL =
@@ -48,10 +69,14 @@ function makeVideoEl() {
 }
 
 /**
- * Camera + FaceLandmarker loop emitting quantizable poses at TRACK_HZ.
+ * Camera + FaceLandmarker loop emitting quantized poses at `hz`.
  */
 class FaceTracker {
-  constructor() {
+  /**
+   * @param {number} hz
+   */
+  constructor(hz = TRACK_HZ) {
+    this.hz = hz;
     /** @type {(pose: PoseFrame) => void} */
     this.onPose = () => {};
     this.seq = 0;
@@ -121,7 +146,7 @@ class FaceTracker {
     if (now - this.lastSent < 1000 / TRACK_HZ) return;
     if (!this.video?.videoWidth) return;
     const result = this.landmarker.detectForVideo(this.video, now);
-    if (now - this.lastSent < 1000 / TRACK_HZ) return; // detect() took the budget
+    if (now - this.lastSent < 1000 / this.hz) return; // detect() took the budget
     this.lastSent = now;
 
     const pose = this._extract(result);
@@ -273,12 +298,17 @@ function drawLabel(ctx, label, cx, w) {
 export class AvatarManager {
   /**
    * @param {import('../net/connection.js').Connection} conn
-   * @param {{ onStateChange?: (active: boolean) => void }} [opts]
+   * @param {{ onStateChange?: (active: boolean) => void,
+   *          hz?: number, epsShape?: number, epsAngle?: number }} [opts]
    */
   constructor(conn, opts = {}) {
     this.conn = conn;
     this.onStateChange = opts.onStateChange || (() => {});
-    this.tracker = new FaceTracker();
+    this.tracker = new FaceTracker(opts.hz);
+    this.throttle = new PoseThrottle({
+      epsShape: opts.epsShape,
+      epsAngle: opts.epsAngle,
+    });
     /** @type {Map<string, string>} cid → uid labels */
     this.uidByCid = new Map();
     this.myUid = '';
@@ -300,8 +330,11 @@ export class AvatarManager {
     this.gcTimer = /** @type {number | undefined} */ (undefined);
 
     this.tracker.onPose = (pose) => {
-      this.conn.sendBinary(encodeAvatarFrame(pose));
-      this.local && Object.assign(this.local, { yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll });
+      if (this.throttle.consider(pose, performance.now()).action === 'send') {
+        this.conn.sendBinary(encodeAvatarFrame(pose));
+      }
+      // Local preview always follows the tracker; suppression only saves wire.
+      Object.assign(this.local, { yaw: pose.yaw, pitch: pose.pitch, roll: pose.roll });
       for (let i = 0; i < SHAPE_COUNT; i++) this.local.shapes[i] = pose.shapes[i];
     };
   }

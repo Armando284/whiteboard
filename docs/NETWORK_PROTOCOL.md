@@ -119,6 +119,11 @@ Server behavior: requires room membership; exact size + tag validated; rate
 limited to one relay per ~33 ms per member; never stored, never echoed to the
 sender. Budget: 13 B @ 12 Hz ≈ **156 B/s per active avatar**.
 
+Send-side suppression (phase 6): clients SHOULD suppress poses below a
+deadband and emit keepalives at least every ~400 ms so peers' TTLs don't drop
+a quiet avatar. Measured effect: idle cost drops to ≈37 B/s (see
+`BANDWIDTH_AVATAR.md`); the wire format is unchanged.
+
 Toggling off sends a JSON `avatar_off` so peers can drop the sprite immediately;
 a 5 s TTL covers unclean disconnects.
 
