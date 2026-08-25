@@ -176,7 +176,7 @@ new Toolbar(store, {
       .then((mgr) => mgr.toggle())
       .then((on) => btn?.setAttribute('aria-pressed', String(on)))
       .catch((err) => {
-        console.warn('[low-net] avatar unavailable:', err?.name || err);
+        console.warn("[low-net] avatar unavailable:", err?.message || err);
         presence.setError('camera', { code: 'camera' });
         btn?.setAttribute('aria-pressed', 'false');
       });
@@ -194,7 +194,7 @@ new Toolbar(store, {
       })
       .then((on) => btn?.setAttribute('aria-pressed', String(on)))
       .catch((err) => {
-        console.warn('[low-net] audio unavailable:', err?.name || err);
+        console.warn("[low-net] audio unavailable:", err?.message || err);
         presence.setError('mic', { code: 'mic' });
         btn?.setAttribute('aria-pressed', 'false');
       });

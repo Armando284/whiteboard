@@ -107,7 +107,9 @@ class FaceTracker {
     this.video.srcObject = this.stream;
     await this.video.play();
 
-    const vision = await import(/* webpackIgnore: true */ MEDIAPIPE_CDN);
+    // Explicit ESM entry: the package ROOT resolves to vision_bundle.cjs
+    // (CommonJS), which browsers cannot import — this burned us once.
+    const vision = await import(/* webpackIgnore: true */ `${MEDIAPIPE_CDN}/vision_bundle.mjs`);
     const fileset = await vision.FilesetResolver.forVisionTasks(`${MEDIAPIPE_CDN}/wasm`);
     try {
       this.landmarker = await vision.FaceLandmarker.createFromOptions(fileset, {

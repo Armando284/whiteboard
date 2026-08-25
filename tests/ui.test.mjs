@@ -137,3 +137,34 @@ test('ui: keyboard shortcut keeps buttons in sync with clicks', async () => {
     cleanup();
   }
 });
+
+test('ui: media buttons surface explicit errors when media APIs are absent', async () => {
+  const { dom, cleanup } = await boot();
+  const doc = dom.window.document;
+  const warns = [];
+  const origWarn = console.warn;
+  console.warn = (...a) => warns.push(a.join(' '));
+  try {
+    const avatarBtn = doc.getElementById('act-avatar');
+    const audioBtn = doc.getElementById('act-audio');
+    const label = doc.getElementById('conn-label');
+
+    // No camera API in jsdom → the guard must fire a visible, detailed error.
+    click(dom.window, avatarBtn);
+    await new Promise((r) => setTimeout(r, 5));
+    assert.match(label.textContent, /ERR camera/);
+    assert.equal(avatarBtn.getAttribute('aria-pressed'), 'false');
+    assert.ok(
+      warns.some((w) => w.includes('avatar unavailable') && w.includes('camera API')),
+      `expected detailed avatar warn, got: ${warns.join(' | ')}`,
+    );
+
+    click(dom.window, audioBtn);
+    await new Promise((r) => setTimeout(r, 5));
+    assert.match(label.textContent, /ERR mic/);
+    assert.ok(warns.some((w) => w.includes('audio unavailable')), warns.join(' | '));
+  } finally {
+    console.warn = origWarn;
+    cleanup();
+  }
+});
