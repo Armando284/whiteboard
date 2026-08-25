@@ -16,6 +16,7 @@ import {
   pack,
   unpack,
   drawFace,
+  defaultAppearance,
 } from '../avatar/looks.js';
 
 const PREVIEW_SIZE = 48;
@@ -25,6 +26,10 @@ const PREVIEW_SIZE = 48;
  * @typedef {import('../avatar/avatar.js').AvatarManager} AvatarManager
  */
 
+const _fallbackApp = typeof defaultAppearance === 'function' ? defaultAppearance() : {
+  hairStyle: 1, hairColor: 0, eyes: 0, brows: 0, nose: 0, mouth: 0
+};
+
 export class AvatarStudio {
   /**
    * @param {AvatarManager} mgr
@@ -32,7 +37,7 @@ export class AvatarStudio {
   constructor(mgr) {
     this.mgr = mgr;
     this.visible = false;
-    this.app = mgr.localAppearance;
+    this.app = (mgr && mgr.localAppearance) || _fallbackApp;
     this._buildDOM();
     this._renderPreview();
   }

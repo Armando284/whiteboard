@@ -30,6 +30,12 @@ import {
   unpack,
 } from './looks.js';
 
+/** Fallback if looks.js imports fail. */
+const _defaultAppearance = () => ({
+  hairStyle: 1, hairColor: 0, eyes: 0, brows: 0, nose: 0, mouth: 0
+});
+const _safeDefault = typeof defaultAppearance === 'function' ? defaultAppearance : _defaultAppearance;
+
 const TRACK_HZ = 12;
 const SMOOTH_RATE = 18; // higher = snappier interpolation
 const REMOTE_TTL_MS = 5000;
@@ -338,10 +344,10 @@ export class AvatarManager {
   _loadAppearance() {
     try {
       const raw = localStorage.getItem('low-net-avatar-appearance');
-      if (!raw) return defaultAppearance();
+      if (!raw) return _safeDefault();
       return unpack(Uint8Array.from(JSON.parse(raw), Number));
     } catch {
-      return defaultAppearance();
+      return _safeDefault();
     }
   }
 
@@ -351,13 +357,14 @@ export class AvatarManager {
    * @param {Appearance} app
    */
   setLocalAppearance(app) {
-    this.localAppearance = app;
+    const safeApp = app && typeof app === 'object' ? app : _safeDefault();
+    this.localAppearance = safeApp;
     try {
-      localStorage.setItem('low-net-avatar-appearance', JSON.stringify([...pack(app)]));
+      localStorage.setItem('low-net-avatar-appearance', JSON.stringify([...pack(safeApp)]));
     } catch {}
     const u8 = new Uint8Array(CONFIG_FRAME_BYTES);
     u8[0] = TAG_AVATAR_CONFIG;
-    u8.set(pack(app), 1);
+    u8.set(pack(safeApp), 1);
     this.conn.sendBinary(u8);
   }
 
