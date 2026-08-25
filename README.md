@@ -1,84 +1,55 @@
-# 🎨 Real-Time Collaborative Whiteboard  
+# 🎨 Low-Net Whiteboard
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)  
-🌐 **Draw together in real-time, optimized for low-bandwidth connections.**  
-
----
-
-## ✨ Features  
-- **Pixel-perfect sync**: WebSocket binary protocol with RLE compression  
-- **Apple Pencil optimized**: Pressure sensitivity & palm rejection  
-- **700kbps-friendly**: Works on unstable networks  
-- **Zero Front-End frameworks**: Vanilla JS + Express + Node.js for minimal overhead  
-- **Cross-platform**: Desktop, iPad, and mobile support  
+Real-time collaborative whiteboard designed for **extremely low-bandwidth connections** (~120 kbps). Part of the **Low-Net** experiment: transmitting semantic events instead of pixels, video, or raw state.
 
 ---
 
-## 🛠️ Tech Stack  
-| Component       | Technology           |
-|----------------|---------------------|
-| Frontend       | HTML5 Canvas + WebSockets |
-| Backend        | Node.js + `Express` + `ws` library |
-| Compression    | Run-Length Encoding (RLE) |
-| Data Protocol  | Binary ArrayBuffer |
+## How it works
 
----
+The board synchronizes **stroke events**, not bitmaps:
 
-## 🚀 Quick Start  
+```text
+Client draws        → local in-progress stroke (overlay layer, never touched by network)
+                    → progress points streamed at ~11 Hz (live preview for peers)
+                    → full stroke committed on pointer-up (~1000× less traffic than a snapshot)
+Server              → validates + relays ops, keeps committed state per room
+Other clients       → append to their committed log and render incrementally
+```
+
+- **Concurrent drawing is loss-free**: committed strokes are an append-only log; a remote update can never overwrite your work in progress.
+- **Tools**: pencil, eraser (whole-stroke hit-testing), undo/redo (per-user), clear (explicit generation-bumped event).
+- **Rooms**: URL hash (`/#myroom`), ephemeral in-memory state, snapshot on join/reconnect.
+- **Identity**: temporary 4-char ID per tab (e.g. `A7K9`), no accounts.
+- **Reconnect**: exponential backoff; on resume the server sends a fresh `init` snapshot.
+
+## Stack
+
+| Component  | Technology                          |
+|------------|-------------------------------------|
+| Frontend   | Vanilla JS (ES modules) + Canvas    |
+| Backend    | Node.js + Express + `ws`            |
+| Protocol   | JSON envelopes (`v`, `t`, payload)  |
+| Deployment | Vercel (see `docs/VERCEL_LIMITATIONS.md`) |
+
+No build step. No frontend dependencies.
+
+## Run
 
 ```bash
-# 1. Clone and install
-git clone https://github.com/yourusername/collaborative-whiteboard.git
-cd collaborative-whiteboard
 npm install
-
-# 2. Run the server (default port: 3000)
-node server.js
-
-# 3. Open in browser:
-# http://localhost:3000
+npm start          # http://localhost:3000
+npm run dev        # with --watch
+npm test           # integration tests (node:test + ws)
+node tests/smoke.mjs   # manual smoke probe (server must be running on :3999)
 ```
 
----
+The status bar shows a compact live readout (`↑↓ kB/s · RTT`). Click the pulse icon in the toolbar (or append `?debug=1` to the URL) for the full network stats card: bytes by category, msg/s, RTT, reconnects, FPS.
 
-## 📊 How It Works  
+## Documentation
 
-### Data Flow  
-1. **Drawing**:  
-   - Mouse/Apple Pencil/touch generates binary coordinates (6 bytes per point)  
-   - Debounced 300ms WebSocket sends  
+- [`docs/LOW_NET_ARCHITECTURE.md`](docs/LOW_NET_ARCHITECTURE.md) — audit, proposed architecture, decisions, roadmap
+- [`docs/VERCEL_LIMITATIONS.md`](docs/VERCEL_LIMITATIONS.md) — platform limits, classified documented/observed/assumption
 
-2. **Server**:  
-   - Compresses updates using RLE  
-   - Broadcasts to all clients  
+## License
 
-3. **Clients**:  
-   - Decompress RLE → Render to Canvas  
-
-### Apple Pencil Support  
-```javascript
-canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'pen') {
-    const pressure = e.pressure * 255; // 0-255 scale
-    sendPoint(x, y, pressure);
-  }
-});
-```
-
----
-
-## 📸 Screenshot  
-*(Add screenshot link here)*  
-
----
-
-## 📜 License  
-MIT © [Armando Peña](https://armandodev.vercel.app)  
-
----
-
-## 🙌 Contributing  
-PRs welcome! Key areas for improvement:  
-- Better RLE compression  
-- Stroke smoothing algorithms  
-- Mobile UI enhancements  
+MIT © [Armando Peña](https://armandodev.vercel.app)
