@@ -467,11 +467,12 @@ export class AvatarManager {
       }
     }, 2000));
     const loop = () => {
-      // Keep rendering while dock should be visible OR there are remotes.
-      if (!this.showDock && this.remotes.size === 0) {
+      // Keep rendering while camera is active OR dock should be visible OR there are remotes.
+      if (!this.active && !this.showDock && this.remotes.size === 0) {
         this.rafId = null;
         clearInterval(this.gcTimer);
-        this.dock.hidden = true;
+        // Only hide dock if not explicitly kept visible and camera is off.
+        if (!this.showDock && !this.active) this.dock.hidden = true;
         return;
       }
       this.rafId = requestAnimationFrame(loop);

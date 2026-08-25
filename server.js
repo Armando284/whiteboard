@@ -573,7 +573,7 @@ function handleRtcSignal(member, msg) {
 const AVATAR_TAG = 0x01;
 const AVATAR_CONFIG_TAG = 0x03;
 const AVATAR_RELAY_TAG = 0x02;
-const AVATAR_FRAME_BYTES = 13;  // 0x01 tag
+const AVATAR_FRAME_BYTES = 21;  // 0x01 + seq + 3 angles + 16 shapes
 const AVATAR_CONFIG_BYTES = 4;  // 0x03 tag + 3 packed appearance bytes
 const AVATAR_MIN_INTERVAL_MS = 33; // ~30 Hz hard cap per sender (pose frames)
 

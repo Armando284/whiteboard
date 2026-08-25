@@ -21,7 +21,9 @@ test('avatar frame is exactly FRAME_BYTES and roundtrips', () => {
   const pose = {
     seq: 42,
     yaw: 0.3, pitch: -0.2, roll: 0.1,
-    shapes: [0.9, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
+    // 16 shapes matching SHAPE_NAMES order
+    shapes: [0.9, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
+             0.8, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.1],
   };
   const enc = encodeAvatarFrame(pose);
   assert.equal(enc.length, FRAME_BYTES);
@@ -53,11 +55,13 @@ test('angles clamp to ±80° and survive the int8 boundary', () => {
 test('shapes clamp to [0,1]; non-finite becomes 0', () => {
   const enc = encodeAvatarFrame({
     seq: 0, yaw: 0, pitch: 0, roll: 0,
-    shapes: [-1, 2, NaN, Infinity, -Infinity, 0.5, 1, 0],
+    shapes: [-1, 2, NaN, Infinity, -Infinity, 0.5, 1, 0,
+             0.3, 0.7, -0.5, 1.5, NaN, 0.2, 0.8, 0.1],
   });
   const dec = /** @type {any} */ (decodeAvatarFrame(enc));
   assert.deepEqual(dec.shapes.map((/** @type {number} */ v) => Math.round(v * 1000)), [
     0, 1000, 0, 0, 0, 502, 1000, 0,
+    302, 702, 0, 1000, 0, 200, 800, 102,
   ]);
 });
 
@@ -70,7 +74,7 @@ test('decode rejects garbage', () => {
 test('relay frame wraps cid and decodes back', () => {
   const sender = encodeAvatarFrame({
     seq: 7, yaw: -0.4, pitch: 0.15, roll: 0,
-    shapes: [0.25, 0, 0, 0, 0, 1, 0, 0],
+    shapes: [0.25, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   });
   const relay = buildRelayFrame('c123', sender);
   assert.ok(relay);
@@ -86,7 +90,7 @@ test('relay frame wraps cid and decodes back', () => {
 });
 
 test('buildRelayFrame rejects invalid input', () => {
-  const ok = encodeAvatarFrame({ seq: 1, yaw: 0, pitch: 0, roll: 0, shapes: [] });
+  const ok = encodeAvatarFrame({ seq: 1, yaw: 0, pitch: 0, roll: 0, shapes: new Array(SHAPE_COUNT).fill(0) });
   assert.equal(buildRelayFrame('', ok), null);
   assert.equal(buildRelayFrame('c'.repeat(256), ok), null);
   assert.equal(buildRelayFrame('c1', new Uint8Array([0x05, ...new Array(20).fill(0)])), null);

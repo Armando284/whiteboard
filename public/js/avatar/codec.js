@@ -31,12 +31,12 @@ export const TAG_AVATAR = 0x01;
 export const TAG_AVATAR_RELAY = 0x02;
 export const TAG_AVATAR_CONFIG = 0x03;
 
-export const SHAPE_COUNT = 8;
-export const FRAME_BYTES = 13; // 0x01 + seq + 3 angles + 8 shapes
+export const SHAPE_COUNT = 16;
+export const FRAME_BYTES = 21; // 0x01 + seq + 3 angles + 16 shapes
 export const CONFIG_FRAME_BYTES = 4; // 0x03 + 3 packed appearance bytes
-export const MAX_RELAY_BYTES = 68;
+export const MAX_RELAY_BYTES = 76;
 
-/** Blendshape order on the wire. MediaPipe names. */
+/** Blendshape order on the wire. MediaPipe names (16 expressive shapes). */
 export const SHAPE_NAMES = /** @type {const} */ ([
   'jawOpen',
   'mouthSmileLeft',
@@ -46,6 +46,15 @@ export const SHAPE_NAMES = /** @type {const} */ ([
   'eyeBlinkLeft',
   'eyeBlinkRight',
   'mouthPucker',
+  // +8 more for richer expression:
+  'eyeSquintLeft',
+  'eyeSquintRight',
+  'mouthFrownLeft',
+  'mouthFrownRight',
+  'browInnerUp',
+  'cheekSquintLeft',
+  'cheekSquintRight',
+  'jawForward',
 ]);
 
 export const ANGLE_MAX_RAD = (80 * Math.PI) / 180;
