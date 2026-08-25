@@ -129,6 +129,9 @@ export function createStore() {
     for (const id of existing) {
       captured.push(/** @type {StrokeData} */ (strokes.get(id)));
       strokes.delete(id);
+      // Clear any live-preview state, otherwise an undo would restore
+      // the stroke while it is still marked hidden (invisible).
+      hidden.delete(id);
     }
     pushUndo({
       do: { t: 'erase', ids: existing },

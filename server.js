@@ -3,13 +3,74 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const crypto = require('crypto');
+const fs = require('fs');
 const { WebSocketServer, WebSocket } = require('ws');
 
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, clientTracking: true, maxPayload: 64 * 1024 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// ---------------------------------------------------------------------------
+// Static assets + cache busting
+//
+// There is no build step, so browsers/CDNs can silently serve stale JS after
+// a deploy and make fixed bugs look alive. Every deploy changes a content
+// hash that is appended to the asset URLs in index.html; sub-resources are
+// then cached immutably while the HTML itself always revalidates.
+// ---------------------------------------------------------------------------
+function computeAssetVersion() {
+  const hash = crypto.createHash('sha1');
+  hash.update(Date.now().toString(36)); // new value on every process start/deploy
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(p);
+      } else {
+        const s = fs.statSync(p);
+        hash.update(`${p}:${s.size}:${s.mtimeMs}`);
+      }
+    }
+  };
+  try {
+    walk(path.join(__dirname, 'public'));
+  } catch {
+    // fall back to timestamp-only version
+  }
+  return hash.digest('hex').slice(0, 10);
+}
+
+const ASSET_V = computeAssetVersion();
+console.info(`[low-net] build ${ASSET_V}`);
+
+let indexHtml = '';
+try {
+  indexHtml = fs
+    .readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8')
+    .replace(/(href="style\.css")/g, `href="style.css?v=${ASSET_V}"`)
+    .replace(/(src="js\/main\.js")/g, `src="js/main.js?v=${ASSET_V}"`)
+    .replace('</head>', `<meta name="build" content="${ASSET_V}"></head>`);
+} catch {
+  // static middleware will serve it untouched as a fallback
+}
+
+app.get('/', (_req, res) => {
+  res.type('html').set('Cache-Control', 'no-cache').send(indexHtml);
+});
+app.get('/index.html', (_req, res) => {
+  res.type('html').set('Cache-Control', 'no-cache').send(indexHtml);
+});
+
+app.use(
+  express.static(path.join(__dirname, 'public'), {
+    setHeaders(res) {
+      // Versioned URLs (?v=...) are safe to cache hard; dynamic ES module
+      // imports inherit the query string from their importer.
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
+  }),
+);
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');

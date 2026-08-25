@@ -11,6 +11,12 @@ import { PresenceBar } from './ui/presence.js';
 const uid = getUid();
 const salt = getSessionSalt();
 
+// Visible build marker: lets anyone confirm which version the browser runs.
+console.info(
+  '[low-net] build',
+  document.querySelector('meta[name="build"]')?.content || 'dev',
+);
+
 let room = '';
 {
   const raw = decodeURIComponent(location.hash.replace(/^#/, ''));
