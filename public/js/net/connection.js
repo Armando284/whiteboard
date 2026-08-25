@@ -15,11 +15,14 @@ const RTT_PROBE_MS = 5000;
 export class Connection extends EventTarget {
   /**
    * @param {NetworkMetrics} [metrics] injectable for tests
+   * @param {(url: string) => WebSocket} [socketFactory] injectable for the
+   *        phase-8 network simulator; defaults to a real WebSocket.
    */
-  constructor(metrics) {
+  constructor(metrics, socketFactory) {
     super();
     /** @type {WebSocket | null} */
     this.socket = null;
+    this.socketFactory = socketFactory || ((url) => new WebSocket(url));
     this.room = '';
     this.uid = '';
     this.status = 'down';
@@ -59,7 +62,7 @@ export class Connection extends EventTarget {
     }
     this._setStatus('connecting');
     const scheme = location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const socket = new WebSocket(`${scheme}${location.host}`);
+    const socket = this.socketFactory(`${scheme}${location.host}`);
     this.socket = socket;
     socket.binaryType = 'arraybuffer';
 

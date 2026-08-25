@@ -1,6 +1,7 @@
 'use strict';
 
 import { Connection } from './net/connection.js';
+import { NetSim } from './net/netsim.js';
 import { getUid, getSessionSalt } from './net/identity.js';
 import { createStore } from './whiteboard/store.js';
 import { BoardView } from './whiteboard/render.js';
@@ -16,6 +17,16 @@ console.info(
   '[low-net] build',
   document.querySelector('meta[name="build"]')?.content || 'dev',
 );
+
+// Phase 8: optional client-side network simulation (?net=30k&netlat=150...).
+const urlParams = new URLSearchParams(location.search);
+const simOptions = NetSim.optionsFromURL(urlParams);
+/** @type {NetSim | null} */
+let netSim = null;
+if (simOptions) {
+  netSim = new NetSim(simOptions);
+  console.info('[low-net] netsim:', NetSim.describe(simOptions));
+}
 
 let room = '';
 {
@@ -34,7 +45,7 @@ const presence = new PresenceBar();
 presence.setIdentifiers(room, uid);
 presence.setStatus('connecting');
 
-const conn = new Connection();
+const conn = new Connection(null, netSim ? (url) => netSim.wrap(new WebSocket(url)) : undefined);
 conn.addEventListener('message', (e) => {
   const msg = /** @type {CustomEvent<Record<string, unknown>>} */ (e).detail;
   switch (msg.t) {
@@ -150,11 +161,17 @@ new Toolbar(store, {
 {
   const readout = document.getElementById('net-readout');
   if (readout) {
+    if (netSim && simOptions) {
+      readout.textContent = NetSim.describe(simOptions);
+      readout.title = 'Network simulator active — traffic is artificially throttled';
+    }
     setInterval(() => {
       const m = conn.metrics.snapshot();
       readout.textContent = m.rtt.samples
-        ? `↑ ${(m.rate.upBps / 1024).toFixed(1)} · ↓ ${(m.rate.downBps / 1024).toFixed(1)} kB/s · RTT ${m.rtt.last} ms`
-        : 'NETWORK —';
+        ? `${netSim ? `${NetSim.describe(simOptions)} · ` : ''}↑ ${(m.rate.upBps / 1024).toFixed(1)} · ↓ ${(m.rate.downBps / 1024).toFixed(1)} kB/s · RTT ${m.rtt.last} ms`
+        : netSim
+          ? NetSim.describe(simOptions)
+          : 'NETWORK —';
     }, 1000);
   }
 }

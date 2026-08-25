@@ -41,6 +41,9 @@ throttled networks; afterwards it is HTTP-cached.
 | 10 | Model download once | Reload page, re-enable avatar | Second load starts tracking quickly (model cached), no re-download spike in Network tab |
 | 11 | Board coexistence | Draw while avatars are on | Drawing latency/rendering unaffected; strokes keep converging as usual |
 | 12 | Experiment knobs | Reload with `?avhz=4&avdb=0.06`, enable avatar | Tracking visibly choppier; stats card "Avatar traffic" drops towards the `BANDWIDTH_AVATAR.md` table values; idle cost stays ≈37 B/s |
+| 13 | Simulated low bandwidth | Reload both tabs with `?net=30k&netlat=150&netjit=80` and draw together | Status bar shows `SIM 30k · +150±80ms`; strokes still converge; readout shows real ↑/↓ kB/s under the cap; RTT reflects the added latency |
+| 14 | Loss visibility | Same as 13 plus `&netloss=5` | Stats card "Lost ops" climbs occasionally; board self-heals on reconnect (`init` re-baseline) |
+| 15 | Forced disconnects | `?net=120k&netcut=10` for ~40 s | OFFLINE↔SYNC cycles with backoff; outboxed strokes flush after each recovery; no duplicate presence chips |
 
 ## Edge cases
 
