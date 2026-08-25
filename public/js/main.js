@@ -224,6 +224,9 @@ new Toolbar(store, {
         setToggleState(btn, false);
       });
   },
+  avatarConfigure: () => {
+    loadAvatarStudio().then((studio) => studio.show());
+  },
   audio: () => {
     const btn = document.getElementById('act-audio');
     setToggleState(btn, true); // optimistic: permission prompt takes time

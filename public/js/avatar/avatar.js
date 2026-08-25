@@ -274,7 +274,6 @@ export class AvatarManager {
     this.ctx = /** @type {CanvasRenderingContext2D} */ (this.canvas.getContext('2d'));
     /** @type {import('../ui/avatar-studio.js').AvatarStudio | null} */
     this.studio = null;
-    this.dock.querySelector('#avatar-configure')?.addEventListener('click', () => this.openStudio());
 
     /** @type {Smooth} */
     this.local = { yaw: 0, pitch: 0, roll: 0, shapes: new Array(SHAPE_COUNT).fill(0) };

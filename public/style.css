@@ -160,35 +160,6 @@ body[data-tool='eraser'] .board {
   z-index: 900;
 }
 
-#avatar-dock header.avatar-dock-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--text-secondary-color);
-  opacity: 0.7;
-  user-select: none;
-}
-
-#avatar-dock header button {
-  background: none;
-  border: none;
-  color: inherit;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 2px 4px;
-  opacity: 0.6;
-  transition: opacity 0.12s;
-}
-
-#avatar-dock header button:hover {
-  opacity: 1;
-}
-
 #avatar-dock canvas {
   display: block;
   background: rgba(255, 255, 255, 0.82);

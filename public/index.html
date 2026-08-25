@@ -60,6 +60,12 @@
           <rect x="2" y="4" width="20" height="16" rx="3"/>
         </svg>
       </button>
+      <button id="act-avatar-configure" aria-pressed="false" title="Configure avatar">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+      </button>
       <button id="act-audio" aria-pressed="false" title="Voice (WebRTC)">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -82,10 +88,6 @@
         <div id="presence" aria-label="Connected users"></div>
       </div>
       <div id="avatar-dock" hidden>
-        <header class="avatar-dock-header">
-          <span>AVATAR</span>
-          <button type="button" id="avatar-configure" title="Configure avatar" aria-label="Configure avatar">⚙</button>
-        </header>
         <canvas id="avatar-stage"></canvas>
       </div>
     </main>

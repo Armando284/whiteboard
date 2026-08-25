@@ -4,12 +4,12 @@
  * Top toolbar: tool switching, history actions, keyboard shortcuts.
  */
 export class Toolbar {
-  /**
-   * @param {StoreLike} store
-   * @param {{ undo: () => void, redo: () => void, clear: () => void, stats?: () => void, avatar?: () => void, audio?: () => void }} actions
-   * @param {(tool: 'pencil' | 'eraser') => void} onToolChange
-   */
-  constructor(store, actions, onToolChange) {
+/**
+ * @param {StoreLike} store
+ * @param {{ undo: () => void, redo: () => void, clear: () => void, stats?: () => void, avatar?: () => void, avatarConfigure?: () => void, audio?: () => void }} actions
+ * @param {(tool: 'pencil' | 'eraser') => void} onToolChange
+ */
+constructor(store, actions, onToolChange) {
     this.store = store;
     this.onToolChange = onToolChange;
 
@@ -30,6 +30,9 @@ export class Toolbar {
     }
     if (actions.avatar) {
       document.getElementById('act-avatar')?.addEventListener('click', () => actions.avatar());
+    }
+    if (actions.avatarConfigure) {
+      document.getElementById('act-avatar-configure')?.addEventListener('click', () => actions.avatarConfigure());
     }
     if (actions.audio) {
       document.getElementById('act-audio')?.addEventListener('click', () => actions.audio());
