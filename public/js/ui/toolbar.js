@@ -47,6 +47,8 @@ export class Toolbar {
       btn.classList.toggle('active', btn.dataset.tool === tool);
       btn.setAttribute('aria-pressed', String(btn.dataset.tool === tool));
     }
+    // Drives the board cursor (body[data-tool='eraser'] .board).
+    document.body.dataset.tool = tool;
     this.onToolChange(tool);
   }
 
