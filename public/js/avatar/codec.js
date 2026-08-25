@@ -1,32 +1,40 @@
 'use strict';
 
 /**
- * Avatar wire codec — Low-Net phase 5.
+ * Avatar wire codec — Low-Net phase 5 + appearance (post-phase-9).
  *
  * Pure binary format, Node-testable, no browser dependencies.
- * Budget: 13 B/frame at 12 Hz ≈ 156 B/s per active avatar.
  *
- * Sender frame (client → server), tag 0x01:
+ * Pose sender frame (tag 0x01):
  *   [0]  0x01
  *   [1]  seq      uint8   rolling counter
- *   [2]  yaw      int8    head rotation, quantized to ±ANGLE_MAX_RAD
+ *   [2]  yaw      int8    quantized to ±80°
  *   [3]  pitch    int8
  *   [4]  roll     int8
  *   [5..12]       uint8×8 blendshapes, 0..255 maps 0..1
  *
- * Relay frame (server → peers), tag 0x02 — server prepends the sender's cid:
+ * Appearance config frame (tag 0x03):
+ *   [0]  0x03
+ *   [1]  byte0    [hairStyle:4][hairColor:4]
+ *   [2]  byte1    [eyes:4     ][brows:4]
+ *   [3]  byte2    [nose:4     ][mouth:4]
+ *
+ * Relay frame (tag 0x02) — server prepends sender's cid, then the full
+ * inner frame (including its original tag byte):
  *   [0]  0x02
  *   [1]  cidLen   uint8
  *   [2..]         cid ASCII bytes
- *   [2+cidLen..]  sender frame payload WITHOUT its tag byte (seq onward)
+ *   [2+cidLen..]  full inner frame (tag + payload)
  */
 
 export const TAG_AVATAR = 0x01;
 export const TAG_AVATAR_RELAY = 0x02;
+export const TAG_AVATAR_CONFIG = 0x03;
 
 export const SHAPE_COUNT = 8;
-export const FRAME_BYTES = 13; // 1 tag + 1 seq + 3 angles + 8 shapes
-export const MAX_RELAY_BYTES = 64;
+export const FRAME_BYTES = 13; // 0x01 + seq + 3 angles + 8 shapes
+export const CONFIG_FRAME_BYTES = 4; // 0x03 + 3 packed appearance bytes
+export const MAX_RELAY_BYTES = 68;
 
 /** Blendshape order on the wire. MediaPipe names. */
 export const SHAPE_NAMES = /** @type {const} */ ([
@@ -117,38 +125,59 @@ export function decodeAvatarFrame(buf) {
 }
 
 /**
- * Server-side: wraps a validated sender frame with the sender's cid.
+ * Server-side: wraps a validated sender/config frame with the sender's cid.
+ * The full inner frame (including its original tag byte) is preserved.
  * @param {string} cid
- * @param {Uint8Array | Buffer} senderFrame full frame incl. 0x01 tag
+ * @param {Uint8Array | Buffer} innerFrame full frame incl. tag (0x01 or 0x03)
  * @returns {Uint8Array | null} relay frame, or null when input is invalid
  */
-export function buildRelayFrame(cid, senderFrame) {
-  if (!senderFrame || senderFrame.length < FRAME_BYTES || senderFrame[0] !== TAG_AVATAR) return null;
+export function buildRelayFrame(cid, innerFrame) {
+  if (!innerFrame) return null;
+  const tag = innerFrame[0];
+  if (tag !== TAG_AVATAR && tag !== TAG_AVATAR_CONFIG) return null;
+  const expectedLen = tag === TAG_AVATAR ? FRAME_BYTES : CONFIG_FRAME_BYTES;
+  if (innerFrame.length < expectedLen) return null;
   if (!cid || cid.length === 0 || cid.length > 255) return null;
   const enc = new TextEncoder();
   const cidBytes = enc.encode(cid);
-  const out = new Uint8Array(2 + cidBytes.length + (senderFrame.length - 1));
+  const out = new Uint8Array(2 + cidBytes.length + innerFrame.length);
   out[0] = TAG_AVATAR_RELAY;
   out[1] = cidBytes.length;
   out.set(cidBytes, 2);
-  out.set(senderFrame.subarray(1), 2 + cidBytes.length);
+  out.set(innerFrame instanceof Uint8Array ? innerFrame : new Uint8Array(innerFrame), 2 + cidBytes.length);
   return out;
 }
 
 /**
- * Client-side: splits a relay frame into sender cid + decoded pose.
+ * Client-side: splits a relay frame into sender cid + inner content.
+ * For tag 0x01 pose frames returns { type:'pose', cid, pose }.
+ * For tag 0x03 config frames returns { type:'config', cid, app: Uint8Array(3) }.
  * @param {Uint8Array | ArrayBuffer} buf
- * @returns {{ cid: string, pose: PoseFrame } | null}
+ * @returns {{ type: string, cid: string, pose?: PoseFrame, app?: Uint8Array } | null}
  */
 export function parseRelayFrame(buf) {
   const u8 = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
-  if (u8.length < 2 || u8[0] !== TAG_AVATAR_RELAY) return null;
+  if (u8.length < 3 || u8[0] !== TAG_AVATAR_RELAY) return null;
   const cidLen = u8[1];
-  if (cidLen === 0 || u8.length < 2 + cidLen + (FRAME_BYTES - 1)) return null;
-  const cid = new TextDecoder().decode(u8.subarray(2, 2 + cidLen));
-  const frame = new Uint8Array(FRAME_BYTES);
-  frame[0] = TAG_AVATAR;
-  frame.set(u8.subarray(2 + cidLen), 1);
-  const pose = decodeAvatarFrame(frame);
-  return pose ? { cid, pose } : null;
+  if (cidLen === 0) return null;
+  const cidStart = 2;
+  const frameStart = cidStart + cidLen;
+  if (frameStart >= u8.length) return null;
+  const cid = new TextDecoder().decode(u8.subarray(cidStart, frameStart));
+  const innerTag = u8[frameStart];
+
+  if (innerTag === TAG_AVATAR) {
+    if (u8.length < frameStart + FRAME_BYTES) return null;
+    const frame = new Uint8Array(FRAME_BYTES);
+    frame.set(u8.subarray(frameStart, frameStart + FRAME_BYTES));
+    const pose = decodeAvatarFrame(frame);
+    return pose ? { type: 'pose', cid, pose } : null;
+  }
+
+  if (innerTag === TAG_AVATAR_CONFIG) {
+    if (u8.length < frameStart + CONFIG_FRAME_BYTES) return null;
+    return { type: 'config', cid, app: new Uint8Array(u8.subarray(frameStart + 1, frameStart + CONFIG_FRAME_BYTES)) };
+  }
+
+  return null;
 }

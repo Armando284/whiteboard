@@ -55,6 +55,11 @@ throttled networks; afterwards it is HTTP-cached.
 - [ ] Keyboard: P/E switch tools; Ctrl+Z / Ctrl+Shift+Z history
 - [ ] Mobile viewport: toolbar fits one row; drawing doesn't scroll page
 - [ ] Server restart while tabs open → tabs reconnect to fresh room state (documented ephemeral behavior)
+- [ ] Android Chrome: micrófono — verificar prompt de permiso y transmisión audible (incidencia abierta)
+
+## Bandwidth report (Phase 9)
+
+- [ ] Real-world session ~120 kbps: `docs/BANDWIDTH_REPORT.md` (pico 15.2 kB/s, total 1025.9 KB, audio P2P ~12–16 kbps)
 
 ## Known MVP limitations (by design)
 

@@ -103,7 +103,7 @@ const UID_RE = /^[A-Za-z0-9_-]{1,24}$/;
 //
 // ---------------------------------------------------------------------------
 /**
- * @typedef {{ id: string, uid: string, ws: WebSocket, lastAvatarTs?: number }} Member
+ * @typedef {{ id: string, uid: string, ws: WebSocket, lastAvatarTs?: number, cfg?: Buffer }} Member
  * @typedef {{ id: string, gen: number, seq: number, strokes: Map<string, {id: string, pts: number[]}>, members: Map<string, Member> }} Room
  */
 /** @type {Map<string, Room>} */
@@ -146,6 +146,21 @@ function pruneRoom(room) {
 function memberList(room) {
   const out = [];
   for (const m of room.members.values()) out.push({ cid: m.id, uid: m.uid });
+  return out;
+}
+
+/**
+ * Returns a map of {cid: base64(cfg)} for members that have broadcast
+ * an appearance config (tag 0x03).  Tiny: 3 bytes per entry, base64 = 4 chars.
+ * @param {Room} room
+ * @returns {Record<string, string>}
+ */
+function cfgsMap(room) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  for (const m of room.members.values()) {
+    if (m.cfg) out[m.id] = m.cfg.toString('base64');
+  }
   return out;
 }
 
@@ -394,6 +409,7 @@ function handleHello(member, msg) {
     seq: room.seq,
     strokes: [...room.strokes.values()],
     members: memberList(room),
+    cfgs: cfgsMap(room),
   });
 
   broadcast(room, member.id, { v: 1, t: 'join', cid: member.id, uid: member.uid });
@@ -555,31 +571,49 @@ function handleRtcSignal(member, msg) {
 // Must mirror public/js/avatar/codec.js (kept inline because server.js is CJS;
 // the codec integration tests pin both sides to the same contract).
 const AVATAR_TAG = 0x01;
+const AVATAR_CONFIG_TAG = 0x03;
 const AVATAR_RELAY_TAG = 0x02;
-const AVATAR_FRAME_BYTES = 13;
-const AVATAR_MIN_INTERVAL_MS = 33; // ~30 Hz hard cap per sender
+const AVATAR_FRAME_BYTES = 13;  // 0x01 tag
+const AVATAR_CONFIG_BYTES = 4;  // 0x03 tag + 3 packed appearance bytes
+const AVATAR_MIN_INTERVAL_MS = 33; // ~30 Hz hard cap per sender (pose frames)
 
 /**
- * Validates and relays an avatar pose frame to the sender's room peers,
- * prefixing it with the sender's cid so receivers can attribute it.
+ * Validates and relays an avatar frame (pose 0x01 OR appearance config 0x03)
+ * to the sender's room peers. Config frames are also persisted on the member
+ * record so late-joiners can receive them via init.
  * @param {Member & {roomRef?: Room}} member
  * @param {Buffer} buf
  */
 function handleAvatarBinary(member, buf) {
   const room = member.roomRef;
   if (!room) return;
-  if (buf.length !== AVATAR_FRAME_BYTES || buf[0] !== AVATAR_TAG) return;
 
-  const now = Date.now();
-  if (member.lastAvatarTs !== undefined && now - member.lastAvatarTs < AVATAR_MIN_INTERVAL_MS) return;
-  member.lastAvatarTs = now;
+  const tag = buf[0];
+  let expected;
+  if (tag === AVATAR_TAG) expected = AVATAR_FRAME_BYTES;
+  else if (tag === AVATAR_CONFIG_TAG) expected = AVATAR_CONFIG_BYTES;
+  else return;
+  if (buf.length < expected) return;
 
+  // Config frames are idempotent — always accept (no rate-limit).
+  if (tag === AVATAR_TAG) {
+    const now = Date.now();
+    if (member.lastAvatarTs !== undefined && now - member.lastAvatarTs < AVATAR_MIN_INTERVAL_MS) return;
+    member.lastAvatarTs = now;
+  }
+
+  if (tag === AVATAR_CONFIG_TAG) {
+    // Persist the 3 inner appearance bytes (without tag) for late-joiners.
+    member.cfg = buf.subarray(1, AVATAR_CONFIG_BYTES);
+  }
+
+  // Relay: [0x02, cidLen, cid..., full inner frame including its tag byte].
   const cidBuf = Buffer.from(member.id, 'ascii');
-  const out = Buffer.allocUnsafe(2 + cidBuf.length + (buf.length - 1));
+  const out = Buffer.allocUnsafe(2 + cidBuf.length + expected);
   out[0] = AVATAR_RELAY_TAG;
   out[1] = cidBuf.length;
   cidBuf.copy(out, 2);
-  buf.copy(out, 2 + cidBuf.length, 1);
+  buf.copy(out, 2 + cidBuf.length, 0, expected);
   broadcastBinary(room, member.id, out);
 }
 

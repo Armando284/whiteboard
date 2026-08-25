@@ -312,7 +312,7 @@ Honesty note: WebSockets run over TCP, so "packet loss" manifests as latency spi
 | 6 ✅ | Avatar optimization: deadband suppression + keepalives, Hz/deadband knobs (`?avhz`/`?avdb`), deterministic sweep bench | Measured avatar bandwidth curve (`BANDWIDTH_AVATAR.md`) |
 | 7 ✅ | Audio prototype: WebRTC mesh (STUN, cid tie-break), Opus mono ≈12 kbps via SDP munge + setParameters, getStats metering ("Audio P2P" row) | Measured audio bitrate (`BANDWIDTH_AUDIO.md`; real-world numbers in phase 9) |
 | 8 ✅ | Network simulator: client-side WS shim with token-bucket up/down, latency±jitter, seeded loss, forced cuts (`?net=30k&netlat=150&netjit=80&netloss=2&netcut=20`) | Reproducible dev harness |
-| 9 | Real-world test ~120 kbps | BANDWIDTH_REPORT.md with real numbers |
+| 9 ✅ | Real-world test ~120 kbps | BANDWIDTH_REPORT.md with real numbers (pico 15.2 kB/s, 1025.9 KB sesión; mic Android pendiente re-test) |
 
 Each phase closes with its test matrix (concurrent users, disconnect/reconnect/refresh; avatar edge cases incl. no-face/camera-denied; simulated bandwidth tiers).
 

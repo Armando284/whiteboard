@@ -54,8 +54,17 @@ conn.addEventListener('message', (e) => {
     case 'init':
       if (typeof msg.you === 'string') myCid = msg.you;
       store.applyRemote(msg);
+      // Restore peer appearance configs sent by the server on reconnect.
+      if (msg.cfgs && avatarManager) {
+        for (const [cid, b64] of Object.entries(msg.cfgs)) {
+          const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          avatarManager.setRemoteAppearance(cid, bin);
+        }
+      }
       // Re-announce an active mic after (re)connect so peers can dial us.
       if (audioLink?.enabled) conn.send({ v: 1, t: 'audio_on' });
+      // Re-announce avatar presence + appearance so late-joiners render us.
+      if (avatarManager?.active) conn.send({ v: 1, t: 'avatar_on' });
       break;
     case 'stroke':
     case 'unstroke':
@@ -118,7 +127,9 @@ let metricsCard = null;
 function loadMetricsCard() {
   if (!metricsCard) {
     return import('./ui/metrics-card.js').then(({ MetricsCard }) => {
-      metricsCard = new MetricsCard(conn, store);
+      metricsCard = new MetricsCard(conn, store, {
+        getSim: () => (simOptions ? NetSim.describe(simOptions) : null),
+      });
       return metricsCard;
     });
   }
@@ -127,6 +138,20 @@ function loadMetricsCard() {
 
 /** @type {Promise<import('./avatar/avatar.js').AvatarManager> | null} */
 let avatarManagerPromise = null;
+
+/** @type {Promise<import('./ui/avatar-studio.js').AvatarStudio> | null} */
+let avatarStudioPromise = null;
+
+/** Lazily constructs the avatar studio sidebar. */
+function loadAvatarStudio() {
+  if (!avatarStudioPromise) {
+    avatarStudioPromise = import('./ui/avatar-studio.js').then(({ AvatarStudio }) => {
+      // Wait for avatarManager to be ready (it's created before first use).
+      return loadAvatarManager().then((mgr) => new AvatarStudio(mgr));
+    });
+  }
+  return avatarStudioPromise;
+}
 
 /** Loads the avatar module (MediaPipe etc.) only on first use. */
 function loadAvatarManager() {
@@ -187,7 +212,12 @@ new Toolbar(store, {
     setToggleState(btn, true); // optimistic: feedback while the model loads
     loadAvatarManager()
       .then((mgr) => mgr.toggle())
-      .then((on) => setToggleState(btn, on))
+      .then((on) => {
+        setToggleState(btn, on);
+        return loadAvatarStudio().then((studio) => {
+          if (on) studio.show(); else studio.hide();
+        });
+      })
       .catch((err) => {
         console.warn("[low-net] avatar unavailable:", err?.message || err);
         presence.setError('camera', { code: 'camera' });

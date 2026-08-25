@@ -7,7 +7,6 @@
  */
 
 const KB = 1024;
-
 /**
  * @param {number} bytes
  * @returns {string}
@@ -39,13 +38,16 @@ function fmtUptime(ms) {
 /** @typedef {ReturnType<import('../whiteboard/store.js').createStore>} Store */
 
 export class MetricsCard {
-  /**
-   * @param {Conn} conn
-   * @param {Store} store
-   */
-  constructor(conn, store) {
+/**
+ * @param {Conn} conn
+ * @param {Store} store
+ * @param {{ getSim?: () => string | null }} [extras]
+ */
+  constructor(conn, store, extras) {
     this.conn = conn;
     this.store = store;
+    /** Optional provider of the active network-simulator description. */
+    this.getSim = extras?.getSim ?? null;
     this.visible = false;
     /** @type {number | undefined} */
     this.timer = undefined;
@@ -58,7 +60,10 @@ export class MetricsCard {
     el.innerHTML = `
       <header>
         <span>NETWORK</span>
-        <button type="button" class="close" title="Close" aria-label="Close network stats">×</button>
+        <span class="actions">
+          <button type="button" class="dl" title="Download JSON report" aria-label="Download JSON report">⬇</button>
+          <button type="button" class="close" title="Close" aria-label="Close network stats">×</button>
+        </span>
       </header>
       <dl>
         <dt>Status</dt><dd data-k="status">—</dd>
@@ -90,6 +95,44 @@ export class MetricsCard {
     }
     this.fields = fields;
     el.querySelector('.close')?.addEventListener('click', () => this.hide());
+    el.querySelector('.dl')?.addEventListener('click', () => this.downloadJson());
+  }
+
+  /**
+   * Exports the full instrumentation state as a downloadable JSON report
+   * for offline debugging / bandwidth reports.
+   */
+  downloadJson() {
+    const m = this.conn.metrics.snapshot();
+    const a = this.audioStats;
+    const payload = {
+      app: 'low-net-whiteboard',
+      exportedAt: new Date().toISOString(),
+      connection: {
+        status: this.conn.status,
+        room: this.conn.room,
+        uid: this.conn.uid,
+        reconnects: m.reconnects,
+        outbox: this.conn.queue.length,
+      },
+      sim: this.getSim ? this.getSim() : null,
+      metrics: m,
+      audioP2P: a ? { upBps: a.upBps, downBps: a.downBps, rttMs: a.rttMs } : null,
+      board: {
+        strokes: this.store.strokes.size,
+        gen: this.store.gen,
+        hidden: this.store.hidden.size,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `low-net-metrics-${this.conn.room || 'room'}-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   toggle() {

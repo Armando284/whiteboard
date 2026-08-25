@@ -68,6 +68,26 @@ export class AudioLink {
     this.statsTimer = undefined;
     /** @type {{ upBps: number, downBps: number, rttMs: number } | null} */
     this.lastCounters = null;
+
+    // Android Chrome may block audio autoplay without a user gesture.
+    // On the first touch/click anywhere, attempt to resume all audio elements.
+    this._attachGestureResume();
+  }
+
+  /**
+   * Attach a one-time listener for user gesture to unblock audio on Android.
+   */
+  _attachGestureResume() {
+    if (typeof window === 'undefined') return;
+    const resume = () => {
+      for (const el of this.audioEls) {
+        if (el.paused) el.play().catch(() => {});
+      }
+      document.removeEventListener('click', resume, { capture: true });
+      document.removeEventListener('touchstart', resume, { capture: true, passive: true });
+    };
+    document.addEventListener('click', resume, { capture: true });
+    document.addEventListener('touchstart', resume, { capture: true, passive: true });
   }
 
   async enable() {
@@ -229,6 +249,7 @@ export class AudioLink {
     pc.ontrack = (ev) => {
       const el = document.createElement('audio');
       el.autoplay = true;
+      el.playsInline = true; // iOS Safari + Android Chrome need this for autoplay
       el.srcObject = ev.streams[0];
       document.body.appendChild(el);
       this.audioEls.push(el);

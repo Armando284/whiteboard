@@ -15,11 +15,20 @@
 import {
   SHAPE_COUNT,
   SHAPE_NAMES,
+  FRAME_BYTES,
+  CONFIG_FRAME_BYTES,
+  TAG_AVATAR_CONFIG,
   encodeAvatarFrame,
   parseRelayFrame,
 } from './codec.js';
 import { PoseThrottle } from './optimize.js';
 import { envelope } from '../net/protocol.js';
+import {
+  drawFace,
+  defaultAppearance,
+  pack,
+  unpack,
+} from './looks.js';
 
 const TRACK_HZ = 12;
 const SMOOTH_RATE = 18; // higher = snappier interpolation
@@ -213,74 +222,6 @@ function stepToward(cur, target, dt) {
 /**
  * Draws one stylized face driven by the pose.
  * @param {CanvasRenderingContext2D} ctx
- * @param {number} cx center x
- * @param {number} cy center y
- * @param {number} r face radius
- * @param {Smooth} s
- */
-function drawFace(ctx, cx, cy, r, s) {
-  const [jaw, smileL, smileR, browL, browR, blinkL, blinkR, pucker] = s.shapes;
-  const smile = (smileL + smileR) / 2;
-
-  ctx.save();
-  ctx.translate(cx, cy);
-  // Head rotation: roll spins, yaw/pitch skew feature offsets.
-  ctx.rotate(s.roll);
-
-  // Head
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, Math.PI * 2);
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  const ex = r * 0.38 + s.yaw * r * 0.25; // horizontal eye shift by yaw
-  const ey = -r * 0.22 + s.pitch * r * 0.3;
-  const er = r * 0.11;
-
-  // Eyes (blink squashes vertically)
-  for (const side of [-1, 1]) {
-    const blink = side < 0 ? blinkL : blinkR;
-    ctx.beginPath();
-    ctx.ellipse(side * ex, ey, er, Math.max(er * (1 - blink), 0.6), 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Brows rise with browOuterUp
-  for (const side of [-1, 1]) {
-    const brow = side < 0 ? browL : browR;
-    const by = ey - er - r * 0.12 - brow * r * 0.16;
-    ctx.beginPath();
-    ctx.moveTo(side * ex - er * 1.4, by);
-    ctx.lineTo(side * ex + er * 1.4, by);
-    ctx.stroke();
-  }
-
-  // Mouth: jaw opens, smile curves corners up, pucker narrows
-  const mw = r * (0.52 - pucker * 0.28);
-  const mh = r * (0.06 + jaw * 0.42);
-  const my = r * 0.34;
-  ctx.beginPath();
-  ctx.ellipse(0, my, mw, mh / 2 + mh / 2, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  if (jaw > 0.05) {
-    ctx.beginPath();
-    ctx.ellipse(0, my, mw * 0.7, mh * 0.55, 0, 0, Math.PI * 2);
-    ctx.fillStyle = INK;
-    ctx.fill();
-  }
-  // Smile ticks
-  if (smile > 0.15) {
-    ctx.beginPath();
-    ctx.moveTo(-mw - 4, my - mh * 0.4 - smile * 5);
-    ctx.lineTo(-mw, my - smile * 6);
-    ctx.moveTo(mw + 4, my - mh * 0.4 - smile * 5);
-    ctx.lineTo(mw, my - smile * 6);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
 
 /**
  * @param {CanvasRenderingContext2D} ctx
@@ -329,6 +270,12 @@ export class AvatarManager {
     this.local = { yaw: 0, pitch: 0, roll: 0, shapes: new Array(SHAPE_COUNT).fill(0) };
     /** @type {Map<string, { target: PoseFrame, cur: Smooth, seen: number }>} */
     this.remotes = new Map();
+
+    /** Packed appearance from localStorage (3 bytes), or null for default. */
+    this.localAppearance = this._loadAppearance();
+    /** Appearance cache keyed by remote cid. */
+    this.remoteAppearances = new Map();
+
     /** @type {number | null} */
     this.rafId = null;
     this.lastFrame = 0;
@@ -361,6 +308,8 @@ export class AvatarManager {
       this.state = 'on';
       this.dock.hidden = false;
       this._startLoop();
+      // Broadcast appearance to peers so they render us correctly.
+      this.setLocalAppearance(this.localAppearance);
       this.onStateChange(true);
     } catch (err) {
       this.state = 'error';
@@ -383,11 +332,57 @@ export class AvatarManager {
   }
 
   /**
+   * Load persisted appearance from localStorage, or return the default.
+   * @returns {Appearance}
+   */
+  _loadAppearance() {
+    try {
+      const raw = localStorage.getItem('low-net-avatar-appearance');
+      if (!raw) return defaultAppearance();
+      return unpack(Uint8Array.from(JSON.parse(raw), Number));
+    } catch {
+      return defaultAppearance();
+    }
+  }
+
+  /**
+   * Update the local appearance, persist to localStorage, and broadcast
+   * a 4-byte config frame to peers via relay.
+   * @param {Appearance} app
+   */
+  setLocalAppearance(app) {
+    this.localAppearance = app;
+    try {
+      localStorage.setItem('low-net-avatar-appearance', JSON.stringify([...pack(app)]));
+    } catch {}
+    const u8 = new Uint8Array(CONFIG_FRAME_BYTES);
+    u8[0] = TAG_AVATAR_CONFIG;
+    u8.set(pack(app), 1);
+    this.conn.sendBinary(u8);
+  }
+
+  /**
+   * Store a remote peer's appearance (decoded from the wire).
+   * @param {string} cid
+   * @param {Uint8Array} appBytes 3 packed bytes from wire
+   */
+  setRemoteAppearance(cid, appBytes) {
+    this.remoteAppearances.set(cid, unpack(appBytes));
+  }
+
+  /**
    * @param {ArrayBuffer} buf
    */
   handleBinary(buf) {
     const parsed = parseRelayFrame(buf);
     if (!parsed) return;
+
+    if (parsed.type === 'config') {
+      this.remoteAppearances.set(parsed.cid, unpack(parsed.app));
+      return;
+    }
+
+    // type === 'pose'
     const entry = this.remotes.get(parsed.cid);
     if (entry) {
       entry.target = parsed.pose;
@@ -405,6 +400,7 @@ export class AvatarManager {
   /** Peer turned their avatar off. */
   remove(cid) {
     this.remotes.delete(cid);
+    this.remoteAppearances.delete(cid);
   }
 
   /**
@@ -414,7 +410,10 @@ export class AvatarManager {
   syncMembers(members) {
     const alive = new Set(members.map((m) => m.cid));
     for (const cid of [...this.remotes.keys()]) {
-      if (!alive.has(cid)) this.remotes.delete(cid);
+      if (!alive.has(cid)) {
+        this.remotes.delete(cid);
+        this.remoteAppearances.delete(cid);
+      }
     }
     this.uidByCid.clear();
     for (const m of members) this.uidByCid.set(m.cid, m.uid);
@@ -464,13 +463,13 @@ export class AvatarManager {
 
     let i = 0;
     if (this.active) {
-      drawFace(ctx, i * CARD_W + CARD_W / 2, 62, 40, this.local);
+      drawFace(ctx, i * CARD_W + CARD_W / 2, 62, 40, this.local, this.localAppearance);
       drawLabel(ctx, this.myUid || 'you', i * CARD_W + CARD_W / 2, CARD_W);
       i += 1;
     }
     for (const [cid, e] of this.remotes) {
       stepToward(e.cur, e.target, dt);
-      drawFace(ctx, i * CARD_W + CARD_W / 2, 62, 40, e.cur);
+      drawFace(ctx, i * CARD_W + CARD_W / 2, 62, 40, e.cur, this.remoteAppearances.get(cid));
       drawLabel(ctx, this.uidByCid.get(cid) || cid, i * CARD_W + CARD_W / 2, CARD_W);
       i += 1;
     }

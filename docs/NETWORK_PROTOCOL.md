@@ -118,11 +118,27 @@ and mirrored inline in `server.js` (integration tests pin both sides).
 | 5–12 | 8×u8 | blendshapes ×255: jawOpen, mouthSmileLeft, mouthSmileRight, browOuterUpLeft, browOuterUpRight, eyeBlinkLeft, eyeBlinkRight, mouthPucker |
 
 **Relay frame — server → peers:** tag `0x02`, cid length u8, sender cid (ASCII),
-then the sender frame without its leading tag byte.
+then the **full inner frame including its original tag byte** (0x01 pose or 0x03 config).
+This lets clients branch on the inner tag without hardcoding 0x01.
 
 Server behavior: requires room membership; exact size + tag validated; rate
 limited to one relay per ~33 ms per member; never stored, never echoed to the
 sender. Budget: 13 B @ 12 Hz ≈ **156 B/s per active avatar**.
+
+**Appearance config frame — 4 bytes, client → server** (tag `0x03`):
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 1 | tag `0x03` |
+| 1 | 1 | byte0: hairStyle(4) + hairColor(4) |
+| 2 | 1 | byte1: eyes(4) + brows(4) |
+| 3 | 1 | byte2: nose(4) + mouth(4) |
+
+All values are 4-bit nibbles (0–15). See `public/js/avatar/looks.js` for trait tables.
+Server persists the 3 payload bytes per member and includes them in `init.cfgs`
+(base64 map) so late-joiners render customized avatars immediately. Relayed
+with tag `0x02` same envelope (full inner frame preserved). Idempotent — no
+rate-limit, re-sent on any local change.
 
 Send-side suppression (phase 6): clients SHOULD suppress poses below a
 deadband and emit keepalives at least every ~400 ms so peers' TTLs don't drop
