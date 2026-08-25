@@ -47,11 +47,24 @@ export class BoardView {
       ctx.fillStyle = INK;
     }
 
+    // State changes mark the affected layer dirty AND must schedule the
+    // repaint frame — otherwise the canvas stays stale until the next
+    // pointer-driven draw happens to flush a frame (erased strokes and
+    // clears would only become visible after touching the board again).
+    const baseRepaint = () => {
+      this.baseDirty = true;
+      this._schedule();
+    };
+    const fullRepaint = () => {
+      this.baseDirty = true;
+      this.overlayDirty = true;
+      this._schedule();
+    };
     store.on('add', (id) => this._onAdd(id));
-    store.on('remove', () => { this.baseDirty = true; });
-    store.on('clear', () => { this.baseDirty = true; this.overlayDirty = true; });
-    store.on('reset', () => { this.baseDirty = true; this.overlayDirty = true; });
-    store.on('hidden', () => { this.baseDirty = true; });
+    store.on('remove', baseRepaint);
+    store.on('clear', fullRepaint);
+    store.on('reset', fullRepaint);
+    store.on('hidden', baseRepaint);
 
     const observeTarget = /** @type {HTMLElement} */ (container.parentElement ?? container);
     const ro = new ResizeObserver(() => this.resize());
