@@ -308,7 +308,7 @@ Honesty note: WebSockets run over TCP, so "packet loss" manifests as latency spi
 | 2 ✅ | Whiteboard hardening: stroke-event refactor, layered render, eraser, undo/redo, clear-as-event, compact top toolbar | Working concurrent-safe board |
 | 3 ✅ | Metrics: NetworkMetrics accounting (bytes by category, msg/s rates, RTT EMA), toolbar button + right-side card (auto-opens with `?debug=1`) | Measurement before optimization |
 | 4 ✅ | Protocol v1: server-side version gate, per-room seq + client gap detection, err surfacing, NETWORK_PROTOCOL.md | Documented, enforced wire contract |
-| 5 | Avatar prototype (camera→tracking→quantize→binary→WS→interpolation→render) | Playable avatar |
+| 5 ✅ | Avatar prototype (camera→tracking→quantize→binary→WS→interpolation→render) | Playable avatar |
 | 6 | Optimization experiments (Hz sweep, thresholds, delta encoding) | Measured avatar bandwidth curve |
 | 7 | Audio research/prototype (WebRTC+Opus, getStats measurement) | Measured audio bitrate |
 | 8 | Network simulator (bw/latency/loss/jitter) | Reproducible dev harness |

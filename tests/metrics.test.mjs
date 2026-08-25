@@ -16,6 +16,7 @@ test('classify sorts wire types into budget categories', () => {
   for (const t of ['stroke', 'unstroke', 'erase', 'restore', 'clear', 'progress']) {
     assert.equal(classify(t), 'board', t);
   }
+  assert.equal(classify('avatar'), 'avatar'); // binary frames metered synthetically
 });
 
 test('wireBytes measures UTF-8 length, not code units', () => {

@@ -151,6 +151,22 @@ body[data-tool='eraser'] .board {
   cursor: cell;
 }
 
+/* ---------- avatar stage ---------- */
+
+#avatar-dock {
+  position: fixed;
+  left: 12px;
+  bottom: 40px;
+  z-index: 900;
+}
+
+#avatar-dock canvas {
+  display: block;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--text-secondary-color);
+  border-radius: 8px;
+}
+
 /* ---------- network metrics card ---------- */
 
 .metrics-card {

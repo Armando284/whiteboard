@@ -256,8 +256,7 @@ test('frames with a wrong protocol version are rejected with err{version}', asyn
   assert.ok(a.ws.readyState >= WebSocket.CLOSING, 'socket closed after bad hello version');
 });
 
-test('state ops carry a contiguous per-room seq and init carries the baseline', async () => {
-  const a = await connect();
+test('state ops carry a contiguous per-room seq and init carries the baseline', async () => {  const a = await connect();
   const b = await connect();
   const initA = await helloSnapshot(a, 't-seq', 'AAAA');
   const initB = await helloSnapshot(b, 't-seq', 'BBBB');
@@ -286,4 +285,69 @@ test('state ops carry a contiguous per-room seq and init carries the baseline', 
   c.ws.close();
   b.ws.close();
   a.ws.close();
+});
+
+test('binary avatar frames relay to room peers with sender cid, not back to sender', async () => {
+  const { encodeAvatarFrame } = await import('../public/js/avatar/codec.js');
+  const a = await connect();
+  const b = await connect();
+  const initA = await helloSnapshot(a, 't-av', 'AAAA');
+  await helloSnapshot(b, 't-av', 'BBBB');
+  void initA;
+
+  const frame = encodeAvatarFrame({
+    seq: 5, yaw: 0.2, pitch: -0.1, roll: 0,
+    shapes: [0.8, 0, 0, 0, 0, 0, 0, 0],
+  });
+  /** @type {Buffer[]} */
+  const binB = [];
+  b.ws.on('message', (raw, isBinary) => { if (isBinary) binB.push(raw); });
+
+  a.ws.send(frame, { binary: true });
+  await new Promise((r) => setTimeout(r, 150));
+  assert.equal(binB.length, 1, 'peer B received exactly one relay frame');
+
+  const { parseRelayFrame } = await import('../public/js/avatar/codec.js');
+  const parsed = parseRelayFrame(new Uint8Array(binB[0]));
+  assert.ok(parsed, 'relay frame decodes');
+  assert.equal(parsed.cid, initA.you);
+  assert.equal(parsed.pose.seq, 5);
+  assert.ok(Math.abs(parsed.pose.shapes[0] - 0.8) < 0.01);
+
+  // Sender must NOT receive its own avatar frame.
+  /** @type {number} */
+  let echoCount = 0;
+  a.ws.on('message', (_raw, isBinary) => { if (isBinary) echoCount += 1; });
+  await new Promise((r) => setTimeout(r, 50));
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(echoCount, 0);
+
+  // Garbage binary is dropped silently.
+  b.ws.send(Buffer.from([0x01, 1, 2, 3]), { binary: true });
+  b.ws.send(Buffer.alloc(32, 9), { binary: true });
+  await new Promise((r) => setTimeout(r, 120));
+  assert.equal(binB.length, 1, 'no relay for malformed frames');
+
+  // avatar_off control op reaches peers as JSON.
+  send(a.ws, { v: 1, t: 'avatar_off' });
+  const off = await waitFor(b.messages, 'avatar_off');
+  assert.equal(off.cid, initA.you);
+
+  b.ws.close();
+  a.ws.close();
+});
+
+test('binary frames from un-helloed sockets are ignored', async () => {
+  const raw = await connect();
+  const loner = await connect();
+  await helloSnapshot(loner, 't-av2', 'LLLL');
+  /** @type {Buffer[]} */
+  const got = [];
+  loner.ws.on('message', (_r, isBinary) => { if (isBinary) got.push(_r); });
+
+  raw.ws.send(Buffer.alloc(13, 1), { binary: true }); // no hello yet
+  await new Promise((r) => setTimeout(r, 120));
+  assert.equal(got.length, 0);
+  raw.ws.close();
+  loner.ws.close();
 });

@@ -1,7 +1,7 @@
 # NETWORK_PROTOCOL.md — Low-Net Wire Protocol v1
 
 Status: **implemented** (server enforced since Phase 4).
-Transport: WebSocket (JSON text frames). Binary frames are reserved for future avatar/audio payloads.
+Transport: WebSocket. JSON text frames are the control plane; binary frames carry avatar poses only (see §8).
 
 ---
 
@@ -59,6 +59,7 @@ Clients track `lastSeq`; on receiving `seq > lastSeq + 1` they count `seq − la
 | `restore` | `{strokes[]}` | Re-add strokes (undo of erase/clear); existing ids ignored. |
 | `clear` | `{}` | Wipes room state; bumps room `gen`. Ignored field: client-sent gen. |
 | `progress` | `{id, i, pts}` | Live preview relay only; never stored. `i` = point index offset. |
+| `avatar_off` | `{}` | Sender's avatar is off; peers remove its avatar (see §8). |
 | `ping` | `{ts}` | App-level RTT probe; answered with `pong`. |
 
 ## 5. Server → Client
@@ -74,6 +75,7 @@ Clients track `lastSeq`; on receiving `seq > lastSeq + 1` they count `seq − la
 | `restore` | `{seq, strokes[]}` | Sanitized subset actually added. Except sender. |
 | `clear` | `{seq, gen}` | Canonical generation; broadcast to all incl. sender. |
 | `progress` | `{id, i, pts}` | Relayed verbatim (validated). Except sender. |
+| `avatar_off` | `{cid}` | Echoed to peers (except sender) when someone disables their avatar. |
 | `pong` | `{ts}` | Echo of app-level ping. |
 | `err` | `{code, got?}` | See below. |
 
@@ -95,8 +97,33 @@ connect ── hello ──▶ init(snapshot+baseline) ──▶ live ops …
 
 Reconnection resets the seq baseline; the first `init` restores committed state. Ops drawn while offline sit in a client outbox (max 256) flushed right after `hello`.
 
-## 8. Evolution rules
+## 8. Binary frames (avatar)
+
+Binary WS frames carry avatar pose only (JSON stays the control plane). All
+multi-byte values are big-endian. Contract implemented by `public/js/avatar/codec.js`
+and mirrored inline in `server.js` (integration tests pin both sides).
+
+**Sender frame — 13 bytes, client → server:**
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 1 | tag `0x01` |
+| 1 | 1 | seq (u8, wraps) |
+| 2–4 | 3×i8 | yaw, pitch, roll quantized to ±80° (`round(rad·127/80°)`) |
+| 5–12 | 8×u8 | blendshapes ×255: jawOpen, mouthSmileLeft, mouthSmileRight, browOuterUpLeft, browOuterUpRight, eyeBlinkLeft, eyeBlinkRight, mouthPucker |
+
+**Relay frame — server → peers:** tag `0x02`, cid length u8, sender cid (ASCII),
+then the sender frame without its leading tag byte.
+
+Server behavior: requires room membership; exact size + tag validated; rate
+limited to one relay per ~33 ms per member; never stored, never echoed to the
+sender. Budget: 13 B @ 12 Hz ≈ **156 B/s per active avatar**.
+
+Toggling off sends a JSON `avatar_off` so peers can drop the sprite immediately;
+a 5 s TTL covers unclean disconnects.
+
+## 9. Evolution rules
 
 - Adding new op types or optional fields = still v1 (unknown types/fields ignored).
 - Changing semantics of existing fields or removing fields = v2, negotiated via `hello`/`err{version}`.
-- Binary frames (avatar pose chunks, later possibly binary board snapshots) will start with a 1-byte type tag; JSON text frames remain the control plane.
+- New binary payloads will start with their own 1-byte type tag (0x01/0x02 taken).

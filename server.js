@@ -103,7 +103,7 @@ const UID_RE = /^[A-Za-z0-9_-]{1,24}$/;
 //
 // ---------------------------------------------------------------------------
 /**
- * @typedef {{ id: string, uid: string, ws: WebSocket }} Member
+ * @typedef {{ id: string, uid: string, ws: WebSocket, lastAvatarTs?: number }} Member
  * @typedef {{ id: string, gen: number, seq: number, strokes: Map<string, {id: string, pts: number[]}>, members: Map<string, Member> }} Room
  */
 /** @type {Map<string, Room>} */
@@ -232,6 +232,24 @@ function broadcast(room, exceptCid, msg) {
   }
 }
 
+/**
+ * Binary broadcast for avatar frames. Format contract lives in
+ * public/js/avatar/codec.js and docs/NETWORK_PROTOCOL.md.
+ * @param {Room} room
+ * @param {string} exceptCid
+ * @param {Buffer} buf
+ */
+function broadcastBinary(room, exceptCid, buf) {
+  for (const m of room.members.values()) {
+    if (m.id === exceptCid) continue;
+    try {
+      if (m.ws.readyState === WebSocket.OPEN) m.ws.send(buf, { binary: true });
+    } catch {
+      // dying socket is cleaned up by close handler
+    }
+  }
+}
+
 let nextCid = 1;
 
 // ---------------------------------------------------------------------------
@@ -252,7 +270,13 @@ wss.on('connection', (ws, req) => {
     ws.isAlive = true;
   });
 
-  ws.on('message', (raw) => {
+  ws.on('message', (raw, isBinary) => {
+    // Binary path: avatar pose frames only (see avatar/codec.js). They never
+    // reset the hello timer — a socket must still say hello to live.
+    if (isBinary) {
+      handleAvatarBinary(member, /** @type {Buffer} */ (raw));
+      return;
+    }
     clearTimeout(helloTimer);
     let msg;
     try {
@@ -318,6 +342,12 @@ function handleMessage(member, msg) {
     case 'restore': return handleRestore(member, msg);
     case 'clear': return handleClear(member, msg);
     case 'progress': return handleProgress(member, msg);
+    case 'avatar_off': {
+      const room = member.roomRef;
+      if (!room) return;
+      broadcast(room, member.id, { v: 1, t: 'avatar_off', cid: member.id });
+      return;
+    }
     case 'ping': return sendTo(member, { v: 1, t: 'pong', ts: Number(msg.ts) || 0 });
     default: return; // unknown types are ignored, never crash
   }
@@ -464,6 +494,41 @@ function handleProgress(member, msg) {
   const startIdx = Number.isInteger(Number(msg.i)) && Number(msg.i) >= 0 ? Number(msg.i) : -1;
   if (!id || !pts || startIdx < 0) return;
   broadcast(room, member.id, { v: 1, t: 'progress', id, i: startIdx, pts });
+}
+
+// ---------------------------------------------------------------------------
+// Avatar binary relay
+// ---------------------------------------------------------------------------
+
+// Must mirror public/js/avatar/codec.js (kept inline because server.js is CJS;
+// the codec integration tests pin both sides to the same contract).
+const AVATAR_TAG = 0x01;
+const AVATAR_RELAY_TAG = 0x02;
+const AVATAR_FRAME_BYTES = 13;
+const AVATAR_MIN_INTERVAL_MS = 33; // ~30 Hz hard cap per sender
+
+/**
+ * Validates and relays an avatar pose frame to the sender's room peers,
+ * prefixing it with the sender's cid so receivers can attribute it.
+ * @param {Member & {roomRef?: Room}} member
+ * @param {Buffer} buf
+ */
+function handleAvatarBinary(member, buf) {
+  const room = member.roomRef;
+  if (!room) return;
+  if (buf.length !== AVATAR_FRAME_BYTES || buf[0] !== AVATAR_TAG) return;
+
+  const now = Date.now();
+  if (member.lastAvatarTs !== undefined && now - member.lastAvatarTs < AVATAR_MIN_INTERVAL_MS) return;
+  member.lastAvatarTs = now;
+
+  const cidBuf = Buffer.from(member.id, 'ascii');
+  const out = Buffer.allocUnsafe(2 + cidBuf.length + (buf.length - 1));
+  out[0] = AVATAR_RELAY_TAG;
+  out[1] = cidBuf.length;
+  cidBuf.copy(out, 2);
+  buf.copy(out, 2 + cidBuf.length, 1);
+  broadcastBinary(room, member.id, out);
 }
 
 // ---------------------------------------------------------------------------

@@ -14,14 +14,17 @@
 const CONTROL_TYPES = new Set(['hello', 'init', 'ping', 'pong', 'err']);
 /** @type {Set<string>} */
 const PRESENCE_TYPES = new Set(['join', 'presence']);
+/** Binary avatar frames (metered via a synthetic type). */
+const AVATAR_TYPES = new Set(['avatar']);
 
 /**
  * @param {string} type
- * @returns {'control'|'presence'|'board'}
+ * @returns {'control'|'presence'|'board'|'avatar'}
  */
 export function classify(type) {
   if (CONTROL_TYPES.has(type)) return 'control';
   if (PRESENCE_TYPES.has(type)) return 'presence';
+  if (AVATAR_TYPES.has(type)) return 'avatar';
   return 'board';
 }
 
@@ -50,7 +53,7 @@ const WINDOW_SLOTS = 60;
 const RTT_ALPHA = 0.2;
 
 function emptyTotals() {
-  return { bytes: 0, msgs: 0, control: 0, presence: 0, board: 0 };
+  return { bytes: 0, msgs: 0, control: 0, presence: 0, board: 0, avatar: 0 };
 }
 
 /**

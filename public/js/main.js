@@ -57,8 +57,12 @@ conn.addEventListener('message', (e) => {
     case 'presence': {
       const members = Array.isArray(msg.members) ? msg.members : [];
       presence.setMembers(/** @type {{cid: string, uid: string}[]} */ (members), uid);
+      avatarManager?.syncMembers(/** @type {{cid: string, uid: string}[]} */ (members));
       break;
     }
+    case 'avatar_off':
+      avatarManager?.remove(typeof msg.cid === 'string' ? msg.cid : '');
+      break;
     case 'err': {
       presence.setError(typeof msg.code === 'string' ? msg.code : 'unknown', msg);
       break;
@@ -67,6 +71,12 @@ conn.addEventListener('message', (e) => {
 });
 conn.addEventListener('status', (e) => {
   presence.setStatus(/** @type {CustomEvent<'up'|'down'|'connecting'>} */ (e).detail);
+});
+
+/** @type {import('./avatar/avatar.js').AvatarManager | null} */
+let avatarManager = null;
+conn.addEventListener('binary', (e) => {
+  avatarManager?.handleBinary(/** @type {CustomEvent<ArrayBuffer>} */ (e).detail);
 });
 
 /** @param {Record<string, unknown>} msg */
@@ -91,6 +101,22 @@ function loadMetricsCard() {
   return Promise.resolve(metricsCard);
 }
 
+/** @type {Promise<import('./avatar/avatar.js').AvatarManager> | null} */
+let avatarManagerPromise = null;
+
+/** Loads the avatar module (MediaPipe etc.) only on first use. */
+function loadAvatarManager() {
+  if (!avatarManagerPromise) {
+    avatarManagerPromise = import('./avatar/avatar.js').then(({ AvatarManager }) => {
+      const mgr = new AvatarManager(conn, {});
+      mgr.myUid = uid;
+      avatarManager = mgr;
+      return mgr;
+    });
+  }
+  return avatarManagerPromise;
+}
+
 new Toolbar(store, {
   undo: () => act(store.undo()),
   redo: () => act(store.redo()),
@@ -103,6 +129,17 @@ new Toolbar(store, {
       card.toggle();
       document.getElementById('act-stats')?.setAttribute('aria-pressed', String(card.visible));
     });
+  },
+  avatar: () => {
+    const btn = document.getElementById('act-avatar');
+    loadAvatarManager()
+      .then((mgr) => mgr.toggle())
+      .then((on) => btn?.setAttribute('aria-pressed', String(on)))
+      .catch((err) => {
+        console.warn('[low-net] avatar unavailable:', err?.name || err);
+        presence.setError('camera', { code: 'camera' });
+        btn?.setAttribute('aria-pressed', 'false');
+      });
   },
 }, (tool) => {
   tools.tool = tool;

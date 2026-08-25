@@ -90,6 +90,7 @@ export class Connection extends EventTarget {
         this._observeSeq(msg);
         this.dispatchEvent(new CustomEvent('message', { detail: msg }));
       } else {
+        this.metrics.onRecv({ t: 'avatar' }, /** @type {ArrayBuffer} */ (e.data).byteLength);
         this.dispatchEvent(new CustomEvent('binary', { detail: e.data }));
       }
     };
@@ -157,6 +158,23 @@ export class Connection extends EventTarget {
     } else {
       if (this.queue.length >= MAX_QUEUE) this.queue.shift();
       this.queue.push(msg);
+    }
+  }
+
+  /**
+   * Binary frames (avatar poses) are fire-and-forget: a pose queued while
+   * offline is worthless on arrival, so they are never outboxed.
+   * @param {Uint8Array} bytes
+   * @returns {boolean} true when actually sent
+   */
+  sendBinary(bytes) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    this.metrics.onSend({ t: 'avatar' }, bytes.byteLength);
+    try {
+      this.socket.send(bytes);
+      return true;
+    } catch {
+      return false;
     }
   }
 

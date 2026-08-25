@@ -6,7 +6,7 @@
 	"scripts": {
 		"start": "node server.js",
 		"dev": "node --watch server.js",
-		"test": "node --test --test-force-exit tests/server.test.js tests/metrics.test.mjs tests/render.test.mjs tests/tools.test.mjs tests/ui.test.mjs"
+		"test": "node --test --test-force-exit tests/server.test.js tests/metrics.test.mjs tests/render.test.mjs tests/tools.test.mjs tests/ui.test.mjs tests/codec.test.mjs"
 	},
 	"keywords": [
 		"dashboard",

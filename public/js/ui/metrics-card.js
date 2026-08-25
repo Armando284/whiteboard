@@ -69,6 +69,7 @@ export class MetricsCard {
         <dt>Total sent</dt><dd data-k="up">—</dd>
         <dt>Total recv</dt><dd data-k="down">—</dd>
         <dt>Board traffic</dt><dd data-k="board">—</dd>
+        <dt>Avatar traffic</dt><dd data-k="avatar">—</dd>
         <dt>Control traffic</dt><dd data-k="ctrl">—</dd>
         <dt>Strokes</dt><dd data-k="strokes">—</dd>
         <dt>Outbox</dt><dd data-k="outbox">—</dd>
@@ -128,6 +129,9 @@ export class MetricsCard {
     f.board.textContent =
       `${fmtBytes(m.sent.board + m.recv.board)} ` +
       `(↑${fmtBytes(m.sent.board)} ↓${fmtBytes(m.recv.board)})`;
+    f.avatar.textContent =
+      `${fmtBytes(m.sent.avatar + m.recv.avatar)} ` +
+      `(↑${fmtBytes(m.sent.avatar)} ↓${fmtBytes(m.recv.avatar)})`;
     f.ctrl.textContent =
       `${fmtBytes(m.sent.control + m.recv.control)} ` +
       `(↑${fmtBytes(m.sent.control)} ↓${fmtBytes(m.recv.control)})`;
