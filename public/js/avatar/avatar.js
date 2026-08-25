@@ -265,12 +265,16 @@ export class AvatarManager {
     this.uidByCid = new Map();
     this.myUid = '';
     this.active = false;
+    this.showDock = false;
     /** @type {'idle'|'loading'|'on'|'error'} */
     this.state = 'idle';
 
     this.canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('avatar-stage'));
     this.dock = /** @type {HTMLElement} */ (document.getElementById('avatar-dock'));
     this.ctx = /** @type {CanvasRenderingContext2D} */ (this.canvas.getContext('2d'));
+    /** @type {import('../ui/avatar-studio.js').AvatarStudio | null} */
+    this.studio = null;
+    this.dock.querySelector('#avatar-configure')?.addEventListener('click', () => this.openStudio());
 
     /** @type {Smooth} */
     this.local = { yaw: 0, pitch: 0, roll: 0, shapes: new Array(SHAPE_COUNT).fill(0) };
@@ -311,6 +315,7 @@ export class AvatarManager {
     try {
       await this.tracker.start();
       this.active = true;
+      this.showDock = true;
       this.state = 'on';
       this.dock.hidden = false;
       this._startLoop();
@@ -333,8 +338,35 @@ export class AvatarManager {
     if (this.rafId !== null) cancelAnimationFrame(this.rafId);
     this.rafId = null;
     clearInterval(this.gcTimer);
-    this.dock.hidden = true;
+    // Only hide dock if not explicitly kept visible (e.g., studio open).
+    if (!this.showDock) this.dock.hidden = true;
     this.onStateChange(false);
+  }
+
+  /**
+   * Called by AvatarStudio to keep the dock visible while configuring.
+   * @param {boolean} visible
+   */
+  setDockVisibility(visible) {
+    this.showDock = visible;
+    this.dock.hidden = !visible && !this.active;
+    if (visible) this._startLoop();
+  }
+
+  /**
+   * Opens the avatar studio for configuration. Keeps dock visible.
+   */
+  openStudio() {
+    this.setDockVisibility(true);
+    if (this.studio) {
+      this.studio.show();
+    } else {
+      // Lazy-load studio if not already created.
+      import('../ui/avatar-studio.js').then(({ AvatarStudio }) => {
+        this.studio = new AvatarStudio(this);
+        this.studio.show();
+      });
+    }
   }
 
   /**
@@ -436,7 +468,8 @@ export class AvatarManager {
       }
     }, 2000));
     const loop = () => {
-      if (!this.active && this.remotes.size === 0) {
+      // Keep rendering while dock should be visible OR there are remotes.
+      if (!this.showDock && this.remotes.size === 0) {
         this.rafId = null;
         clearInterval(this.gcTimer);
         this.dock.hidden = true;
@@ -456,7 +489,8 @@ export class AvatarManager {
    */
   _draw(dt) {
     const dpr = window.devicePixelRatio || 1;
-    const count = (this.active ? 1 : 0) + this.remotes.size;
+    const showLocal = this.active || this.showDock;
+    const count = (showLocal ? 1 : 0) + this.remotes.size;
     const cssW = Math.max(1, count * CARD_W);
     if (this.canvas.width !== Math.round(cssW * dpr)) {
       this.canvas.width = Math.round(cssW * dpr);
@@ -469,8 +503,10 @@ export class AvatarManager {
     ctx.clearRect(0, 0, cssW, CARD_H);
 
     let i = 0;
-    if (this.active) {
-      drawFace(ctx, i * CARD_W + CARD_W / 2, 62, 40, this.local, this.localAppearance);
+    if (showLocal) {
+      // When camera is off but dock visible (studio open), use neutral pose.
+      const pose = this.active ? this.local : { yaw: 0, pitch: 0, roll: 0, shapes: new Array(SHAPE_COUNT).fill(0) };
+      drawFace(ctx, i * CARD_W + CARD_W / 2, 62, 40, pose, this.localAppearance);
       drawLabel(ctx, this.myUid || 'you', i * CARD_W + CARD_W / 2, CARD_W);
       i += 1;
     }

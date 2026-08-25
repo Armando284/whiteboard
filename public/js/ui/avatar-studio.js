@@ -147,6 +147,7 @@ export class AvatarStudio {
   show() {
     this.visible = true;
     this.el.hidden = false;
+    this.mgr?.setDockVisibility(true);
     // Sync with whatever is current on mgr (could have been changed externally).
     this.app = this.mgr.localAppearance;
     this._syncAllButtons();
@@ -156,6 +157,7 @@ export class AvatarStudio {
   hide() {
     this.visible = false;
     this.el.hidden = true;
+    this.mgr?.setDockVisibility(false);
   }
 
   toggle() {
