@@ -157,6 +157,18 @@ function loadAudioLink() {
   return Promise.resolve(audioLink);
 }
 
+/**
+ * Toolbar toggle buttons (avatar/audio) reflect their on/off state both
+ * visually (.active) and semantically (aria-pressed).
+ * @param {HTMLElement | null} btn
+ * @param {boolean} on
+ */
+function setToggleState(btn, on) {
+  if (!btn) return;
+  btn.classList.toggle('active', on);
+  btn.setAttribute('aria-pressed', String(on));
+}
+
 new Toolbar(store, {
   undo: () => act(store.undo()),
   redo: () => act(store.redo()),
@@ -172,17 +184,19 @@ new Toolbar(store, {
   },
   avatar: () => {
     const btn = document.getElementById('act-avatar');
+    setToggleState(btn, true); // optimistic: feedback while the model loads
     loadAvatarManager()
       .then((mgr) => mgr.toggle())
-      .then((on) => btn?.setAttribute('aria-pressed', String(on)))
+      .then((on) => setToggleState(btn, on))
       .catch((err) => {
         console.warn("[low-net] avatar unavailable:", err?.message || err);
         presence.setError('camera', { code: 'camera' });
-        btn?.setAttribute('aria-pressed', 'false');
+        setToggleState(btn, false);
       });
   },
   audio: () => {
     const btn = document.getElementById('act-audio');
+    setToggleState(btn, true); // optimistic: permission prompt takes time
     loadAudioLink()
       .then(async (link) => {
         if (link.enabled) {
@@ -192,11 +206,11 @@ new Toolbar(store, {
         await link.enable();
         return true;
       })
-      .then((on) => btn?.setAttribute('aria-pressed', String(on)))
+      .then((on) => setToggleState(btn, on))
       .catch((err) => {
         console.warn("[low-net] audio unavailable:", err?.message || err);
         presence.setError('mic', { code: 'mic' });
-        btn?.setAttribute('aria-pressed', 'false');
+        setToggleState(btn, false);
       });
   },
 }, (tool) => {

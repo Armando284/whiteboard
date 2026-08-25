@@ -150,18 +150,23 @@ test('ui: media buttons surface explicit errors when media APIs are absent', asy
     const label = doc.getElementById('conn-label');
 
     // No camera API in jsdom → the guard must fire a visible, detailed error.
+    // The button lights up optimistically on click, then reverts on failure.
     click(dom.window, avatarBtn);
+    assert.equal(avatarBtn.classList.contains('active'), true, 'optimistic highlight');
     await new Promise((r) => setTimeout(r, 5));
     assert.match(label.textContent, /ERR camera/);
     assert.equal(avatarBtn.getAttribute('aria-pressed'), 'false');
+    assert.equal(avatarBtn.classList.contains('active'), false, 'highlight reverted');
     assert.ok(
       warns.some((w) => w.includes('avatar unavailable') && w.includes('camera API')),
       `expected detailed avatar warn, got: ${warns.join(' | ')}`,
     );
 
     click(dom.window, audioBtn);
+    assert.equal(audioBtn.classList.contains('active'), true, 'optimistic highlight');
     await new Promise((r) => setTimeout(r, 5));
     assert.match(label.textContent, /ERR mic/);
+    assert.equal(audioBtn.classList.contains('active'), false);
     assert.ok(warns.some((w) => w.includes('audio unavailable')), warns.join(' | '));
   } finally {
     console.warn = origWarn;
