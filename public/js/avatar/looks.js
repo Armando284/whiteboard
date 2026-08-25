@@ -30,9 +30,9 @@ export const HAIR_COLORS = [
 /** Labels shown in the avatar studio sidebar (one per slot). */
 export const HAIR_STYLE_NAMES = ['Bald', 'Short', 'Spiky', 'Curly', 'Long', 'Bun'];
 export const FEATURE_NAMES = {
-  eyes:  ['Dots', 'Happy', 'Wide', 'Sleepy'],
+  eyes: ['Dots', 'Happy', 'Wide', 'Sleepy'],
   brows: ['Neutral', 'Raised', 'Angry', 'Worried'],
-  nose:  ['Dot', 'Line', 'Triangle', 'L'],
+  nose: ['Dot', 'Line', 'Triangle', 'L'],
   mouth: ['Smile', 'Neutral', 'Open', 'Smirk'],
 };
 
@@ -66,10 +66,10 @@ export function clampAppearance(raw) {
   return {
     hairStyle: clampTrait('hairStyle', a.hairStyle ?? DEFAULT.hairStyle),
     hairColor: clampTrait('hairColor', a.hairColor ?? DEFAULT.hairColor),
-    eyes:      clampTrait('eyes',      a.eyes      ?? DEFAULT.eyes),
-    brows:     clampTrait('brows',     a.brows     ?? DEFAULT.brows),
-    nose:      clampTrait('nose',      a.nose      ?? DEFAULT.nose),
-    mouth:     clampTrait('mouth',     a.mouth     ?? DEFAULT.mouth),
+    eyes: clampTrait('eyes', a.eyes ?? DEFAULT.eyes),
+    brows: clampTrait('brows', a.brows ?? DEFAULT.brows),
+    nose: clampTrait('nose', a.nose ?? DEFAULT.nose),
+    mouth: clampTrait('mouth', a.mouth ?? DEFAULT.mouth),
   };
 }
 
@@ -80,8 +80,8 @@ export function pack(app) {
   const a = clampAppearance(app);
   return new Uint8Array([
     ((a.hairStyle & 0x0f) << 4) | (a.hairColor & 0x0f),
-    ((a.eyes      & 0x0f) << 4) | (a.brows     & 0x0f),
-    ((a.nose      & 0x0f) << 4) | (a.mouth     & 0x0f),
+    ((a.eyes & 0x0f) << 4) | (a.brows & 0x0f),
+    ((a.nose & 0x0f) << 4) | (a.mouth & 0x0f),
   ]);
 }
 
@@ -92,10 +92,10 @@ export function unpack(buf) {
   return clampAppearance({
     hairStyle: (u8[0] >>> 4) & 0x0f,
     hairColor: u8[0] & 0x0f,
-    eyes:      (u8[1] >>> 4) & 0x0f,
-    brows:     u8[1] & 0x0f,
-    nose:      (u8[2] >>> 4) & 0x0f,
-    mouth:     u8[2] & 0x0f,
+    eyes: (u8[1] >>> 4) & 0x0f,
+    brows: u8[1] & 0x0f,
+    nose: (u8[2] >>> 4) & 0x0f,
+    mouth: u8[2] & 0x0f,
   });
 }
 
@@ -192,11 +192,20 @@ function drawHair(ctx, cx, cy, r, style, color) {
 
 /* ── facial features ───────────────────────────────────────────────── */
 
-function drawEyes(ctx, cx, cy, r, variant) {
+function drawEyes(ctx, cx, cy, r, variant, blink = 0) {
   ctx.fillStyle = INK;
   const eyeY = cy - r * 0.08;
   const eyeX = r * 0.25;
   const eyeR = r * 0.09;
+  if (blink > 0.35) {
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = r * 0.06;
+    ctx.lineCap = 'round';
+    [-1, 1].forEach((s) => {
+      line(ctx, cx + s * eyeX - eyeR, eyeY, cx + s * eyeX + eyeR, eyeY);
+    });
+    return;
+  }
   switch (variant) {
     case 0: // dots
       dot(ctx, cx - eyeX, eyeY, eyeR);
@@ -297,13 +306,19 @@ function drawNose(ctx, cx, cy, r, variant) {
   }
 }
 
-function drawMouth(ctx, cx, cy, r, variant) {
+function drawMouth(ctx, cx, cy, r, variant, open = 0) {
   ctx.strokeStyle = INK;
   ctx.fillStyle = INK;
   ctx.lineWidth = r * 0.06;
   ctx.lineCap = 'round';
   const my = cy + r * 0.28;
   const mw = r * 0.18;
+  if (open > 0.12) {
+    ctx.beginPath();
+    ctx.ellipse(cx, my, mw * (0.7 + open * 0.3), r * (0.05 + open * 0.12), 0, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
   switch (variant) {
     case 0: // smile
       arc(ctx, cx, my - r * 0.03, mw, r * 0.08, Math.PI * 0.15, Math.PI * 0.85, false);
@@ -329,18 +344,31 @@ function drawMouth(ctx, cx, cy, r, variant) {
 /* ── main render entry point ───────────────────────────────────────── */
 
 /**
- * Draw a complete avatar head from packed appearance + smoothPose angle.
+ * Draw a complete avatar head from packed appearance + smooth tracker pose.
  * Compatible with existing drawFace call sites (app defaults to DEFAULT).
  * @param {CanvasRenderingContext2D} ctx
  * @param {number} cx   centre x
  * @param {number} cy   centre y
  * @param {number} r    head radius (from tracker bbox)
- * @param {{ angle?: number, mouthOpen?: number }} smoothPose
+ * @param {{ yaw?: number, pitch?: number, roll?: number, shapes?: number[] }} smoothPose
  * @param {Appearance} [app]  appearance; defaults to DEFAULT
  */
 export function drawFace(ctx, cx, cy, r, smoothPose, app) {
   const a = app || DEFAULT;
   const hairColor = HAIR_COLORS[a.hairColor & 0x0f] || INK;
+  const pose = smoothPose || {};
+  const shapes = Array.isArray(pose.shapes) ? pose.shapes : [];
+  const value = (index) => Math.max(0, Math.min(1, Number(shapes[index]) || 0));
+  const yaw = Number(pose.yaw) || 0;
+  const pitch = Number(pose.pitch) || 0;
+  const roll = Number(pose.roll) || 0;
+
+  // Keep the configured design, then layer tracker motion over it.
+  ctx.save();
+  ctx.translate(cx + Math.sin(yaw) * r * 0.18, cy + Math.sin(pitch) * r * 0.12);
+  ctx.rotate(roll);
+  cx = 0;
+  cy = 0;
 
   // Head circle — warm skin tone
   ctx.fillStyle = '#FFCBA4';
@@ -355,18 +383,9 @@ export function drawFace(ctx, cx, cy, r, smoothPose, app) {
   drawHair(ctx, cx, cy, r, a.hairStyle, hairColor);
 
   // Facial features (ink layer)
-  drawEyes(ctx, cx, cy, r, a.eyes);
+  drawEyes(ctx, cx, cy, r, a.eyes, Math.max(value(5), value(6)));
   drawBrows(ctx, cx, cy, r, a.brows);
   drawNose(ctx, cx, cy, r, a.nose);
-  drawMouth(ctx, cx, cy, r, a.mouth);
-
-  // Smooth-pose tilt
-  if (smoothPose?.angle) {
-    ctx.save();
-    ctx.globalAlpha = 0.08;
-    ctx.fillStyle = INK;
-    const tiltX = Math.sin(smoothPose.angle) * r * 0.04;
-    dot(ctx, cx + tiltX, cy + r * 0.02, r * 0.5);
-    ctx.restore();
-  }
+  drawMouth(ctx, cx, cy, r, a.mouth, value(0));
+  ctx.restore();
 }
