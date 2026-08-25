@@ -82,6 +82,7 @@ app.get('/ping', (req, res) => res.send('pong'));
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
+const PROTOCOL_VERSION = 1;
 const WORLD_W = 800;
 const WORLD_H = 600;
 const MAX_POINTS_PER_STROKE = 4096;
@@ -103,7 +104,7 @@ const UID_RE = /^[A-Za-z0-9_-]{1,24}$/;
 // ---------------------------------------------------------------------------
 /**
  * @typedef {{ id: string, uid: string, ws: WebSocket }} Member
- * @typedef {{ id: string, gen: number, strokes: Map<string, {id: string, pts: number[]}>, members: Map<string, Member> }} Room
+ * @typedef {{ id: string, gen: number, seq: number, strokes: Map<string, {id: string, pts: number[]}>, members: Map<string, Member> }} Room
  */
 /** @type {Map<string, Room>} */
 const rooms = new Map();
@@ -115,10 +116,20 @@ const rooms = new Map();
 function getOrCreateRoom(id) {
   let room = rooms.get(id);
   if (!room) {
-    room = { id, gen: 0, strokes: new Map(), members: new Map() };
+    room = { id, gen: 0, seq: 0, strokes: new Map(), members: new Map() };
     rooms.set(id, room);
   }
   return room;
+}
+
+/**
+ * Next sequence number for a room's state-changing ops. Clients use it to
+ * detect delivery gaps (see NETWORK_PROTOCOL.md).
+ * @param {Room} room
+ * @returns {number}
+ */
+function nextSeq(room) {
+  return ++room.seq;
 }
 
 /** @param {Room} room */
@@ -250,6 +261,14 @@ wss.on('connection', (ws, req) => {
       return;
     }
     if (!msg || typeof msg.t !== 'string') return;
+    // Protocol version gate: refuse frames we cannot interpret instead of
+    // guessing. hello also closes the socket so old clients fail fast.
+    const versionOk = msg.v === PROTOCOL_VERSION;
+    if (!versionOk) {
+      sendTo(member, { v: 1, t: 'err', code: 'version', got: msg.v ?? null });
+      if (msg.t === 'hello') member.ws.close();
+      return;
+    }
     handleMessage(member, msg);
   });
 
@@ -330,6 +349,7 @@ function handleHello(member, msg) {
     uid: member.uid,
     room: room.id,
     gen: room.gen,
+    seq: room.seq,
     strokes: [...room.strokes.values()],
     members: memberList(room),
   });
@@ -364,7 +384,7 @@ function handleStroke(member, msg) {
   const pts = sanitizePoints(msg.pts, MAX_POINTS_PER_STROKE);
   if (!id || !pts) return;
   storeStroke(room, id, pts);
-  broadcast(room, member.id, { v: 1, t: 'stroke', id, pts });
+  broadcast(room, member.id, { v: 1, t: 'stroke', seq: nextSeq(room), id, pts });
 }
 
 /**
@@ -377,7 +397,7 @@ function handleUnstroke(member, msg) {
   const id = sanitizeId(msg.id);
   if (!id || !room.strokes.has(id)) return;
   room.strokes.delete(id);
-  broadcast(room, member.id, { v: 1, t: 'unstroke', id });
+  broadcast(room, member.id, { v: 1, t: 'unstroke', seq: nextSeq(room), id });
 }
 
 /**
@@ -395,7 +415,7 @@ function handleErase(member, msg) {
     if (id && room.strokes.delete(id)) removed.push(id);
   }
   if (removed.length === 0) return;
-  broadcast(room, member.id, { v: 1, t: 'erase', ids: removed });
+  broadcast(room, member.id, { v: 1, t: 'erase', seq: nextSeq(room), ids: removed });
 }
 
 /**
@@ -416,7 +436,7 @@ function handleRestore(member, msg) {
     }
   }
   if (restored.length === 0) return;
-  broadcast(room, member.id, { v: 1, t: 'restore', strokes: restored });
+  broadcast(room, member.id, { v: 1, t: 'restore', seq: nextSeq(room), strokes: restored });
 }
 
 /**
@@ -428,7 +448,7 @@ function handleClear(member, _msg) {
   if (!room) return;
   room.gen += 1;
   room.strokes.clear();
-  broadcast(room, null, { v: 1, t: 'clear', gen: room.gen });
+  broadcast(room, null, { v: 1, t: 'clear', seq: nextSeq(room), gen: room.gen });
 }
 
 /**

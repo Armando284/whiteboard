@@ -47,6 +47,7 @@ The status bar shows a compact live readout (`↑↓ kB/s · RTT`). Click the pu
 
 ## Documentation
 
+- [`docs/NETWORK_PROTOCOL.md`](docs/NETWORK_PROTOCOL.md) — wire protocol v1: envelope, ops, limits, seq/resync semantics
 - [`docs/LOW_NET_ARCHITECTURE.md`](docs/LOW_NET_ARCHITECTURE.md) — audit, proposed architecture, decisions, roadmap
 - [`docs/VERCEL_LIMITATIONS.md`](docs/VERCEL_LIMITATIONS.md) — platform limits, classified documented/observed/assumption
 

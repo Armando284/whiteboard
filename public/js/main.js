@@ -59,6 +59,10 @@ conn.addEventListener('message', (e) => {
       presence.setMembers(/** @type {{cid: string, uid: string}[]} */ (members), uid);
       break;
     }
+    case 'err': {
+      presence.setError(typeof msg.code === 'string' ? msg.code : 'unknown', msg);
+      break;
+    }
   }
 });
 conn.addEventListener('status', (e) => {

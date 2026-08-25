@@ -307,7 +307,7 @@ Honesty note: WebSockets run over TCP, so "packet loss" manifests as latency spi
 | 1 ✅ | Audit (this document) | LOW_NET_ARCHITECTURE.md, VERCEL_LIMITATIONS.md |
 | 2 ✅ | Whiteboard hardening: stroke-event refactor, layered render, eraser, undo/redo, clear-as-event, compact top toolbar | Working concurrent-safe board |
 | 3 ✅ | Metrics: NetworkMetrics accounting (bytes by category, msg/s rates, RTT EMA), toolbar button + right-side card (auto-opens with `?debug=1`) | Measurement before optimization |
-| 4 | Protocol v1 versioned envelope + reconnect resync | NETWORK_PROTOCOL.md |
+| 4 ✅ | Protocol v1: server-side version gate, per-room seq + client gap detection, err surfacing, NETWORK_PROTOCOL.md | Documented, enforced wire contract |
 | 5 | Avatar prototype (camera→tracking→quantize→binary→WS→interpolation→render) | Playable avatar |
 | 6 | Optimization experiments (Hz sweep, thresholds, delta encoding) | Measured avatar bandwidth curve |
 | 7 | Audio research/prototype (WebRTC+Opus, getStats measurement) | Measured audio bitrate |
@@ -332,6 +332,13 @@ Each phase closes with its test matrix (concurrent users, disconnect/reconnect/r
 - `public/js/net/metrics.js`: pure accounting (no DOM) — per-category byte totals (control/presence/board), rolling 60×1 s buckets for current/peak rates, uptime-normalized averages, RTT EMA (α=0.2), reconnect counter. Unit-tested in Node.
 - `Connection` meters every frame (UTF-8 wire length, not code units); consumes `ping/pong` at the transport layer so control chatter never reaches the app; probes RTT every 5 s while open. Also hardened: superseded sockets now detach handlers before reconnect to prevent duplicate backoff loops.
 - `public/js/ui/metrics-card.js`: card on the right side, opened with the pulse-icon toolbar button (and auto-opened via `?debug=1`); loads via **dynamic import on first open** — the default page pays zero bytes for instrumentation UI. Shows status/room/uid, RTT last+EMA, msg/s and B/s (current/peak, up/down), totals and board-vs-control split, store counts, outbox depth, reconnects, FPS. The status bar also carries an always-on compact readout (`↑↓ kB/s · RTT`).
+
+### Phase 4 implementation notes
+
+- Server enforces `v === 1`: wrong-version frames get `err{code:"version"}` and are dropped; a wrong-version `hello` also closes the socket.
+- Per-room monotonic `seq` added to state ops (stroke/unstroke/erase/restore/clear); `init` carries the baseline. Client counts gaps into `Lost ops` metrics; baseline resets each session so reconnect-resync stays the standard recovery.
+- Client surfaces server errors in the status bar (ROOM FULL / VERSION MISMATCH).
+- Full wire contract documented in [`NETWORK_PROTOCOL.md`](NETWORK_PROTOCOL.md).
 
 ## Success criteria
 

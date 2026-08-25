@@ -73,6 +73,7 @@ export class MetricsCard {
         <dt>Strokes</dt><dd data-k="strokes">—</dd>
         <dt>Outbox</dt><dd data-k="outbox">—</dd>
         <dt>Reconnects</dt><dd data-k="reconnects">—</dd>
+        <dt>Lost ops</dt><dd data-k="lost">—</dd>
         <dt>FPS</dt><dd data-k="fps">—</dd>
       </dl>`;
     document.body.appendChild(el);
@@ -135,6 +136,7 @@ export class MetricsCard {
       (this.store.hidden.size ? ` · erasing ${this.store.hidden.size}` : '');
     f.outbox.textContent = `${this.conn.queue.length}/256`;
     f.reconnects.textContent = String(m.reconnects);
+    f.lost.textContent = String(m.lostOps);
     f.fps.textContent = this._fps > 0 ? String(this._fps) : '—';
   }
 

@@ -35,6 +35,16 @@ export function wireBytes(wire) {
   return ENCODER.encode(wire).length;
 }
 
+/**
+ * Number of ops missing between two sequence numbers.
+ * @param {number} prev last seen seq
+ * @param {number} next incoming seq
+ * @returns {number} 0 when contiguous
+ */
+export function countMissing(prev, next) {
+  return next > prev + 1 ? next - prev - 1 : 0;
+}
+
 const SLOT_MS = 1000;
 const WINDOW_SLOTS = 60;
 const RTT_ALPHA = 0.2;
@@ -58,6 +68,7 @@ export class NetworkMetrics {
     this.rttSamples = 0;
     this.reconnects = 0;
     this.droppedFrames = 0;
+    this.lostOps = 0;
   }
 
   /**
@@ -87,6 +98,13 @@ export class NetworkMetrics {
 
   noteReconnect() {
     this.reconnects += 1;
+  }
+
+  /**
+   * @param {number} missing count of ops skipped by a sequence jump
+   */
+  noteGap(missing) {
+    this.lostOps += missing;
   }
 
   /**
@@ -127,6 +145,7 @@ export class NetworkMetrics {
       rtt: { last: this.rttLast, ema: Math.round(this.rttEma * 10) / 10, samples: this.rttSamples },
       reconnects: this.reconnects,
       droppedFrames: this.droppedFrames,
+      lostOps: this.lostOps,
     };
   }
 

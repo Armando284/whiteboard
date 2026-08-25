@@ -39,6 +39,21 @@ export class PresenceBar {
   }
 
   /**
+   * Surfaces a protocol-level error in the status bar.
+   * @param {string} code
+   * @param {unknown} [detail]
+   */
+  setError(code, detail) {
+    const text =
+      code === 'room_full' ? 'ROOM FULL (16)' :
+      code === 'version' ? 'VERSION MISMATCH — RELOAD' :
+      `ERR ${code}`;
+    this.dot.className = 'dot down';
+    this.label.textContent = text;
+    console.warn('[low-net] server error:', code, detail ?? '');
+  }
+
+  /**
    * @param {string} room
    * @param {string} uid
    */

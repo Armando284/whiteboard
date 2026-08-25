@@ -234,3 +234,56 @@ test('malformed input does not kill the connection or server', async () => {
   a.ws.close();
   late.ws.close();
 });
+
+test('frames with a wrong protocol version are rejected with err{version}', async () => {
+  const a = await connect();
+  sayHello(a.ws, 't-ver', 'AAAA');
+  await waitFor(a.messages, 'init');
+
+  // An unsupported version is refused and the frame is not applied.
+  send(a.ws, { v: 99, t: 'stroke', id: 'nope', pts: [1, 1, 2, 2] });
+  const err = await waitFor(a.messages, 'err');
+  assert.equal(err.code, 'version');
+  assert.equal(err.got, 99);
+
+  // The connection stays usable afterwards.
+  send(a.ws, { v: 1, t: 'ping', ts: 7 });
+  await waitFor(a.messages, 'pong', (m) => m.ts === 7);
+
+  // A hello with a wrong version closes the socket so old clients fail fast.
+  send(a.ws, { v: 0, t: 'hello', room: 't-ver', uid: 'AAAA' });
+  await new Promise((r) => setTimeout(r, 150));
+  assert.ok(a.ws.readyState >= WebSocket.CLOSING, 'socket closed after bad hello version');
+});
+
+test('state ops carry a contiguous per-room seq and init carries the baseline', async () => {
+  const a = await connect();
+  const b = await connect();
+  const initA = await helloSnapshot(a, 't-seq', 'AAAA');
+  const initB = await helloSnapshot(b, 't-seq', 'BBBB');
+  assert.equal(typeof initA.seq, 'number', 'init carries seq baseline');
+  assert.equal(initB.seq, initA.seq, 'join/presence do not consume seq');
+
+  // Sender A does not get echoes of its own state ops; B observes them.
+  send(a.ws, { v: 1, t: 'stroke', id: 's1', pts: [1, 1, 2, 2] });
+  send(a.ws, { v: 1, t: 'unstroke', id: 's1' });
+  // clear is the one op broadcast to everyone including the sender.
+  send(a.ws, { v: 1, t: 'clear' });
+
+  const sStroke = await waitFor(b.messages, 'stroke', (m) => m.id === 's1');
+  const sUnstroke = await waitFor(b.messages, 'unstroke', (m) => m.id === 's1');
+  const sClear = await waitFor(a.messages, 'clear');
+  assert.deepEqual(
+    [sStroke.seq, sUnstroke.seq, sClear.seq],
+    [initA.seq + 1, initA.seq + 2, initA.seq + 3],
+    'one increment per state op',
+  );
+
+  // A late joiner gets the current seq as its baseline.
+  const c = await connect();
+  const late = await helloSnapshot(c, 't-seq', 'CCCC');
+  assert.equal(late.seq, initA.seq + 3);
+  c.ws.close();
+  b.ws.close();
+  a.ws.close();
+});

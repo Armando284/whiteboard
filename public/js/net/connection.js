@@ -1,7 +1,7 @@
 'use strict';
 
 import { decode, envelope } from './protocol.js';
-import { NetworkMetrics, wireBytes } from './metrics.js';
+import { NetworkMetrics, countMissing, wireBytes } from './metrics.js';
 
 const BACKOFF_MS = [500, 1000, 2000, 4000, 8000];
 const MAX_QUEUE = 256;
@@ -33,6 +33,8 @@ export class Connection extends EventTarget {
     /** @type {number | undefined} */
     this.rttTimer = undefined;
     this.metrics = metrics || new NetworkMetrics();
+    /** @type {number | null} last room-op seq seen; null until init baseline */
+    this.lastSeq = null;
   }
 
   /**
@@ -64,6 +66,8 @@ export class Connection extends EventTarget {
     socket.onopen = () => {
       this.attempt = 0;
       this.reconnects = 0;
+      // New session: the seq baseline is re-established by init.
+      this.lastSeq = null;
       // hello must be the first frame; queued ops follow it.
       this._sendNow(envelope('hello', { room: this.room, uid: this.uid }));
       const pending = this.queue.splice(0, MAX_QUEUE);
@@ -83,6 +87,7 @@ export class Connection extends EventTarget {
           return;
         }
         if (msg.t === 'ping') return;
+        this._observeSeq(msg);
         this.dispatchEvent(new CustomEvent('message', { detail: msg }));
       } else {
         this.dispatchEvent(new CustomEvent('binary', { detail: e.data }));
@@ -115,6 +120,22 @@ export class Connection extends EventTarget {
   _stopRttProbe() {
     clearInterval(this.rttTimer);
     this.rttTimer = undefined;
+  }
+
+  /**
+   * Tracks room-op sequence numbers to detect delivery gaps.
+   * init re-baselines; state ops must be contiguous.
+   * @param {{t: string, seq?: unknown}} msg
+   */
+  _observeSeq(msg) {
+    const seq = typeof msg.seq === 'number' && Number.isInteger(msg.seq) ? msg.seq : null;
+    if (seq === null) return;
+    if (msg.t === 'init') {
+      this.lastSeq = seq;
+      return;
+    }
+    if (this.lastSeq !== null) this.metrics.noteGap(countMissing(this.lastSeq, seq));
+    this.lastSeq = seq;
   }
 
   /**

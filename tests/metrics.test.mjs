@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { classify, wireBytes, NetworkMetrics } from '../public/js/net/metrics.js';
+import { classify, wireBytes, countMissing, NetworkMetrics } from '../public/js/net/metrics.js';
 
 test('classify sorts wire types into budget categories', () => {
   assert.equal(classify('hello'), 'control');
@@ -71,4 +71,19 @@ test('reconnects count independently of connection state', () => {
   m.noteReconnect();
   m.noteReconnect();
   assert.equal(m.snapshot().reconnects, 2);
+});
+
+test('countMissing detects sequence gaps only', () => {
+  assert.equal(countMissing(1, 2), 0); // contiguous
+  assert.equal(countMissing(1, 1), 0); // duplicate/replay
+  assert.equal(countMissing(5, 3), 0); // out of order: never counts
+  assert.equal(countMissing(1, 4), 2); // ops 2 and 3 missing
+  assert.equal(countMissing(0, 100), 99);
+});
+
+test('noteGap accumulates lost ops into the snapshot', () => {
+  const m = new NetworkMetrics();
+  m.noteGap(2);
+  m.noteGap(1);
+  assert.equal(m.snapshot().lostOps, 3);
 });
