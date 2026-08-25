@@ -46,10 +46,17 @@ presence.setIdentifiers(room, uid);
 presence.setStatus('connecting');
 
 const conn = new Connection(null, netSim ? (url) => netSim.wrap(new WebSocket(url)) : undefined);
+/** Our server-assigned cid, learned from the init frame. */
+let myCid = '';
 conn.addEventListener('message', (e) => {
   const msg = /** @type {CustomEvent<Record<string, unknown>>} */ (e).detail;
   switch (msg.t) {
     case 'init':
+      if (typeof msg.you === 'string') myCid = msg.you;
+      store.applyRemote(msg);
+      // Re-announce an active mic after (re)connect so peers can dial us.
+      if (audioLink?.enabled) conn.send({ v: 1, t: 'audio_on' });
+      break;
     case 'stroke':
     case 'unstroke':
     case 'erase':
@@ -73,6 +80,12 @@ conn.addEventListener('message', (e) => {
     }
     case 'avatar_off':
       avatarManager?.remove(typeof msg.cid === 'string' ? msg.cid : '');
+      break;
+    case 'audio_on':
+    case 'audio_off':
+    case 'rtc':
+    case 'rtc_ice':
+      audioLink?.handleControl(msg);
       break;
     case 'err': {
       presence.setError(typeof msg.code === 'string' ? msg.code : 'unknown', msg);
@@ -129,6 +142,21 @@ function loadAvatarManager() {
   return avatarManagerPromise;
 }
 
+/** @type {import('./audio/audiolink.js').AudioLink | null} */
+let audioLink = null;
+
+/** Lazily constructs the audio link; needs our cid from the init frame. */
+function loadAudioLink() {
+  if (!audioLink) {
+    return import('./audio/audiolink.js').then(({ AudioLink }) => {
+      const link = new AudioLink(conn, { myCid, onStats: (s) => metricsCard?.setAudioStats(s) });
+      audioLink = link;
+      return link;
+    });
+  }
+  return Promise.resolve(audioLink);
+}
+
 new Toolbar(store, {
   undo: () => act(store.undo()),
   redo: () => act(store.redo()),
@@ -150,6 +178,24 @@ new Toolbar(store, {
       .catch((err) => {
         console.warn('[low-net] avatar unavailable:', err?.name || err);
         presence.setError('camera', { code: 'camera' });
+        btn?.setAttribute('aria-pressed', 'false');
+      });
+  },
+  audio: () => {
+    const btn = document.getElementById('act-audio');
+    loadAudioLink()
+      .then(async (link) => {
+        if (link.enabled) {
+          link.disable();
+          return false;
+        }
+        await link.enable();
+        return true;
+      })
+      .then((on) => btn?.setAttribute('aria-pressed', String(on)))
+      .catch((err) => {
+        console.warn('[low-net] audio unavailable:', err?.name || err);
+        presence.setError('mic', { code: 'mic' });
         btn?.setAttribute('aria-pressed', 'false');
       });
   },

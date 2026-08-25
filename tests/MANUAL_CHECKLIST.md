@@ -44,6 +44,9 @@ throttled networks; afterwards it is HTTP-cached.
 | 13 | Simulated low bandwidth | Reload both tabs with `?net=30k&netlat=150&netjit=80` and draw together | Status bar shows `SIM 30k · +150±80ms`; strokes still converge; readout shows real ↑/↓ kB/s under the cap; RTT reflects the added latency |
 | 14 | Loss visibility | Same as 13 plus `&netloss=5` | Stats card "Lost ops" climbs occasionally; board self-heals on reconnect (`init` re-baseline) |
 | 15 | Forced disconnects | `?net=120k&netcut=10` for ~40 s | OFFLINE↔SYNC cycles with backoff; outboxed strokes flush after each recovery; no duplicate presence chips |
+| 16 | Voice P2P | Enable mic in both tabs (`#act-audio`), allow permission | Both hear each other; stats card "Audio P2P" shows ≈12–16 kbps while speaking, decaying <1 kbps in silence (DTX) — see `BANDWIDTH_AUDIO.md` |
+| 17 | Audio teardown | Toggle mic off in one tab | Peer's audio stops immediately; "Audio P2P" row returns to — |
+| 18 | Voice under throttle | Repeat 16 with `?net=30k` on one side | Signaling still rides the WS (audio unaffected — it's P2P); voice survives the constrained WS link |
 
 ## Edge cases
 

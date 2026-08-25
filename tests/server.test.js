@@ -351,3 +351,55 @@ test('binary frames from un-helloed sockets are ignored', async () => {
   raw.ws.close();
   loner.ws.close();
 });
+
+test('audio signaling: audio_on/off broadcast, rtc/rtc_ice reach only the target', async () => {
+  const a = await connect();
+  const b = await connect();
+  const c = await connect();
+  const initA = await helloSnapshot(a, 't-aud', 'AAAA');
+  await helloSnapshot(b, 't-aud', 'BBBB');
+  const initC = await helloSnapshot(c, 't-aud', 'CCCC');
+  void initC;
+
+  // audio_on reaches B and C (not A), stamped with sender cid.
+  send(a.ws, { v: 1, t: 'audio_on' });
+  const onB = await waitFor(b.messages, 'audio_on');
+  assert.equal(onB.cid, initA.you);
+  await waitFor(c.messages, 'audio_on');
+
+  // rtc offer targeted at C: only C receives it, stamped `from`.
+  send(a.ws, { v: 1, t: 'rtc', to: initC.you, sdp: 'v=0\r\no=- fake offer' });
+  const offerC = await waitFor(c.messages, 'rtc');
+  assert.equal(offerC.from, initA.you);
+  assert.match(offerC.sdp, /fake offer/);
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(
+    b.messages.filter((m) => m.t === 'rtc').length,
+    0,
+    'B must not see a targeted signal',
+  );
+
+  // ICE candidate passes through as an object.
+  send(a.ws, { v: 1, t: 'rtc_ice', to: initC.you, candidate: { candidate: 'candidate:x', sdpMid: '0' } });
+  const ice = await waitFor(c.messages, 'rtc_ice');
+  assert.equal(ice.from, initA.you);
+  assert.equal(ice.candidate.sdpMid, '0');
+
+  // Malformed signals are dropped silently.
+  send(a.ws, { v: 1, t: 'rtc', to: initC.you }); // no sdp
+  send(a.ws, { v: 1, t: 'rtc', to: 'nope', sdp: 'x' }); // unknown target
+  send(a.ws, { v: 1, t: 'rtc_ice', to: initC.you }); // no candidate
+  send(b.ws, { v: 1, t: 'rtc', to: initA.you, sdp: { evil: true } }); // non-string sdp
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(c.messages.filter((m) => m.t === 'rtc').length, 1);
+  assert.equal(a.messages.filter((m) => m.t === 'rtc').length, 0);
+
+  // audio_off broadcasts so peers tear the session down.
+  send(a.ws, { v: 1, t: 'audio_off' });
+  const offB = await waitFor(b.messages, 'audio_off');
+  assert.equal(offB.cid, initA.you);
+
+  c.ws.close();
+  b.ws.close();
+  a.ws.close();
+});

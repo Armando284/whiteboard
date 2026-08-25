@@ -6,7 +6,7 @@
 export class Toolbar {
   /**
    * @param {StoreLike} store
-   * @param {{ undo: () => void, redo: () => void, clear: () => void, stats?: () => void, avatar?: () => void }} actions
+   * @param {{ undo: () => void, redo: () => void, clear: () => void, stats?: () => void, avatar?: () => void, audio?: () => void }} actions
    * @param {(tool: 'pencil' | 'eraser') => void} onToolChange
    */
   constructor(store, actions, onToolChange) {
@@ -30,6 +30,9 @@ export class Toolbar {
     }
     if (actions.avatar) {
       document.getElementById('act-avatar')?.addEventListener('click', () => actions.avatar());
+    }
+    if (actions.audio) {
+      document.getElementById('act-audio')?.addEventListener('click', () => actions.audio());
     }
 
     store.on('ops', () => this._refreshHistory());

@@ -49,6 +49,8 @@ export class MetricsCard {
     this.visible = false;
     /** @type {number | undefined} */
     this.timer = undefined;
+    /** Latest AudioLink getStats snapshot, or null. */
+    this.audioStats = null;
 
     const el = document.createElement('aside');
     el.className = 'metrics-card';
@@ -71,6 +73,7 @@ export class MetricsCard {
         <dt>Board traffic</dt><dd data-k="board">—</dd>
         <dt>Avatar traffic</dt><dd data-k="avatar">—</dd>
         <dt>Control traffic</dt><dd data-k="ctrl">—</dd>
+        <dt>Audio P2P</dt><dd data-k="audio">—</dd>
         <dt>Strokes</dt><dd data-k="strokes">—</dd>
         <dt>Outbox</dt><dd data-k="outbox">—</dd>
         <dt>Reconnects</dt><dd data-k="reconnects">—</dd>
@@ -110,6 +113,15 @@ export class MetricsCard {
     this.timer = undefined;
   }
 
+  /**
+   * Called by main.js when the AudioLink polls getStats.
+   * @param {{ upBps: number, downBps: number, rttMs: number } | null} s
+   */
+  setAudioStats(s) {
+    this.audioStats = s;
+    if (this.visible) this._render();
+  }
+
   _render() {
     const m = this.conn.metrics.snapshot();
     const r = m.rate;
@@ -135,6 +147,11 @@ export class MetricsCard {
     f.ctrl.textContent =
       `${fmtBytes(m.sent.control + m.recv.control)} ` +
       `(↑${fmtBytes(m.sent.control)} ↓${fmtBytes(m.recv.control)})`;
+    const a = this.audioStats;
+    f.audio.textContent = a
+      ? `${(a.upBps / 1000).toFixed(1)}↑ ${(a.downBps / 1000).toFixed(1)}↓ kbps` +
+        (Number.isFinite(a.rttMs) ? ` · ${Math.round(a.rttMs)} ms` : '')
+      : '—';
     f.strokes.textContent =
       `${this.store.strokes.size} · gen ${this.store.gen}` +
       (this.store.hidden.size ? ` · erasing ${this.store.hidden.size}` : '');

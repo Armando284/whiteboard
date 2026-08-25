@@ -348,6 +348,18 @@ function handleMessage(member, msg) {
       broadcast(room, member.id, { v: 1, t: 'avatar_off', cid: member.id });
       return;
     }
+    case 'audio_on':
+    case 'audio_off': {
+      const room = member.roomRef;
+      if (!room) return;
+      broadcast(room, member.id, { v: 1, t: msg.t, cid: member.id });
+      return;
+    }
+    case 'rtc':
+    case 'rtc_ice': {
+      handleRtcSignal(member, msg);
+      return;
+    }
     case 'ping': return sendTo(member, { v: 1, t: 'pong', ts: Number(msg.ts) || 0 });
     default: return; // unknown types are ignored, never crash
   }
@@ -494,6 +506,46 @@ function handleProgress(member, msg) {
   const startIdx = Number.isInteger(Number(msg.i)) && Number(msg.i) >= 0 ? Number(msg.i) : -1;
   if (!id || !pts || startIdx < 0) return;
   broadcast(room, member.id, { v: 1, t: 'progress', id, i: startIdx, pts });
+}
+
+// ---------------------------------------------------------------------------
+// WebRTC audio signaling relay (phase 7)
+// ---------------------------------------------------------------------------
+
+const RTC_SDP_MAX = 16384; // SDP blobs are ~1–4 kB; generous cap
+
+/**
+ * Relays WebRTC offers/answers/ICE to one named peer. The server never parses
+ * SDP; it stamps the sender so the receiver knows which peer session it
+ * belongs to. Payload is size-capped and string-only by contract with the
+ * client codec below.
+ * @param {Member & {roomRef?: Room}} member
+ * @param {{t: string, to?: unknown, sdp?: unknown, candidate?: unknown}} msg
+ */
+function handleRtcSignal(member, msg) {
+  const room = member.roomRef;
+  if (!room) return;
+  const to = sanitizeId(msg.to);
+  if (!to) return;
+  const target = room.members.get(to);
+  if (!target || target === member) return;
+
+  /** @type {Record<string, unknown>} */
+  const out = { v: 1, t: msg.t, from: member.id };
+  if (typeof msg.sdp === 'string' && msg.sdp.length <= RTC_SDP_MAX) {
+    out.sdp = msg.sdp;
+  } else if (msg.t === 'rtc') {
+    return; // offers/answers need their SDP
+  }
+  if (typeof msg.candidate === 'object' && msg.candidate !== null) {
+    // ICE candidates are small JSON objects; pass through as-is (capped).
+    const json = JSON.stringify(msg.candidate);
+    if (json.length <= 2048) out.candidate = JSON.parse(json);
+    else return;
+  } else if (msg.t === 'rtc_ice') {
+    return;
+  }
+  sendTo(target, out);
 }
 
 // ---------------------------------------------------------------------------

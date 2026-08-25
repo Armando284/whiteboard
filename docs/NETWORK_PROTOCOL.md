@@ -60,6 +60,9 @@ Clients track `lastSeq`; on receiving `seq > lastSeq + 1` they count `seq − la
 | `clear` | `{}` | Wipes room state; bumps room `gen`. Ignored field: client-sent gen. |
 | `progress` | `{id, i, pts}` | Live preview relay only; never stored. `i` = point index offset. |
 | `avatar_off` | `{}` | Sender's avatar is off; peers remove its avatar (see §8). |
+| `audio_on` / `audio_off` | `{}` | Broadcast; peers start/tear down the audio session with `cid` (see §8.1). |
+| `rtc` | `{to, sdp}` | WebRTC offer/answer relayed only to member `to`, stamped `from: sender`. Server never parses SDP. |
+| `rtc_ice` | `{to, candidate}` | ICE candidate relay, same targeting/stamping. |
 | `ping` | `{ts}` | App-level RTT probe; answered with `pong`. |
 
 ## 5. Server → Client
@@ -76,6 +79,8 @@ Clients track `lastSeq`; on receiving `seq > lastSeq + 1` they count `seq − la
 | `clear` | `{seq, gen}` | Canonical generation; broadcast to all incl. sender. |
 | `progress` | `{id, i, pts}` | Relayed verbatim (validated). Except sender. |
 | `avatar_off` | `{cid}` | Echoed to peers (except sender) when someone disables their avatar. |
+| `audio_on` / `audio_off` | `{cid}` | Broadcast; enables/disables audio sessions with that peer. |
+| `rtc` | `{from, sdp}` or `{from, candidate}` on `rtc_ice` | Signaling from another member, relayed verbatim (size-capped). |
 | `pong` | `{ts}` | Echo of app-level ping. |
 | `err` | `{code, got?}` | See below. |
 
@@ -126,6 +131,15 @@ a quiet avatar. Measured effect: idle cost drops to ≈37 B/s (see
 
 Toggling off sends a JSON `avatar_off` so peers can drop the sprite immediately;
 a 5 s TTL covers unclean disconnects.
+
+### 8.1 WebRTC audio signaling
+
+Audio media is peer-to-peer; only signaling rides the WS (JSON, §4/§5 above).
+The server relays `rtc`/`rtc_ice` frames to the named `to` member untouched
+(string SDP ≤16 kB, ICE object ≤2 kB), stamping them with `from`. It never
+inspects or stores session state. Glare avoidance is client-side and
+deterministic: on `audio_on`, only the peer with the lexicographically larger
+cid creates an offer. Signaling bandwidth is negligible (~6 kB per pair setup).
 
 ## 9. Evolution rules
 
