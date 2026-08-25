@@ -96,6 +96,9 @@ class FaceTracker {
    * @param {'up'|'down'} [fallbackDelegate]
    */
   async start(fallbackDelegate) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('camera API unavailable (insecure context — use https:// or localhost)');
+    }
     this.stream = await navigator.mediaDevices.getUserMedia({
       video: { width: 320, height: 240, facingMode: 'user' },
       audio: false,

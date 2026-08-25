@@ -585,7 +585,10 @@ function handleAvatarBinary(member, buf) {
 
 // ---------------------------------------------------------------------------
 
-module.exports = { server, wss, rooms };
+// Vercel (@vercel/node + Fluid WebSockets) requires this module's DEFAULT
+// export to be the http.Server instance; wss/rooms ride along as named
+// exports for the test suite.
+module.exports = { server, wss, rooms, default: server };
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;

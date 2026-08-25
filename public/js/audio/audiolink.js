@@ -72,6 +72,9 @@ export class AudioLink {
 
   async enable() {
     if (this.enabled) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('microphone API unavailable (insecure context — use https:// or localhost)');
+    }
     this.localStream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       video: false,

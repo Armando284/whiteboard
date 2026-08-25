@@ -20,6 +20,7 @@ ASSUMPTION  → reasonable expectation, NOT verified; must be measured before tr
 |---|---|---|
 | The app is deployed on Vercel and WebSockets work in production | **OBSERVED** (owner report) | Owner states deployment scripts launch `server.js` directly |
 | The repo contains **no `vercel.json` and no `api/` directory** | **OBSERVED** (repo inspection) | The exact wiring that makes `server.js` run as a WebSocket-capable function is **not captured in the repository** |
+| `@vercel/node` requires the function module's **default export to be the http.Server** — a plain `{server, wss, rooms}` object fails at boot with *"Invalid export found in module … The default export must be a function or server"* | **OBSERVED** (production log 2026-08-25) | Fixed by adding `default: server` to the exports; named exports kept for tests |
 | Git history shows the project originally targeted Glitch.com | **OBSERVED** (commit `69e36b5`) | `/ping` keep-alive endpoint is a leftover from that era |
 
 > ⚠️ **Action item (early Phase 2):** capture how the current deployment is configured (dashboard build settings, region, Fluid status) into this document. A clean re-deploy from this clone must be reproducible; today that is not guaranteed.
