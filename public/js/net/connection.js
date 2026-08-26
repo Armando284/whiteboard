@@ -93,8 +93,17 @@ export class Connection extends EventTarget {
         this._observeSeq(msg);
         this.dispatchEvent(new CustomEvent('message', { detail: msg }));
       } else {
-        this.metrics.onRecv({ t: 'avatar' }, /** @type {ArrayBuffer} */ (e.data).byteLength);
-        this.dispatchEvent(new CustomEvent('binary', { detail: e.data }));
+        const buf = new Uint8Array(e.data);
+        const tag = buf[0];
+        // Video tags: 0x10=keyframe, 0x11=delta, 0x12=config, 0x13=keyframe_req, 0x20=relay
+        if (tag === 0x10 || tag === 0x11 || tag === 0x12 || tag === 0x13 || tag === 0x20) {
+          this.metrics.onRecv({ t: 'video' }, buf.byteLength);
+          this.dispatchEvent(new CustomEvent('video', { detail: e.data }));
+        } else {
+          // Avatar frames (0x02 relay, 0x01/0x03 direct)
+          this.metrics.onRecv({ t: 'avatar' }, buf.byteLength);
+          this.dispatchEvent(new CustomEvent('binary', { detail: e.data }));
+        }
       }
     };
 
@@ -165,20 +174,30 @@ export class Connection extends EventTarget {
   }
 
   /**
-   * Binary frames (avatar poses) are fire-and-forget: a pose queued while
+   * Binary frames (avatar poses, video frames) are fire-and-forget: queued while
    * offline is worthless on arrival, so they are never outboxed.
    * @param {Uint8Array} bytes
+   * @param {'avatar'|'video'} [type='avatar'] metric category
    * @returns {boolean} true when actually sent
    */
-  sendBinary(bytes) {
+  sendBinary(bytes, type = 'avatar') {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
-    this.metrics.onSend({ t: 'avatar' }, bytes.byteLength);
+    this.metrics.onSend({ t: type }, bytes.byteLength);
     try {
       this.socket.send(bytes);
       return true;
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Send a video binary frame.
+   * @param {Uint8Array} bytes
+   * @returns {boolean}
+   */
+  sendVideo(bytes) {
+    return this.sendBinary(bytes, 'video');
   }
 
   /**

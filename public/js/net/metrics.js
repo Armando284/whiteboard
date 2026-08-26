@@ -16,15 +16,18 @@ const CONTROL_TYPES = new Set(['hello', 'init', 'ping', 'pong', 'err']);
 const PRESENCE_TYPES = new Set(['join', 'presence']);
 /** Binary avatar frames (metered via a synthetic type). */
 const AVATAR_TYPES = new Set(['avatar']);
+/** Binary video frames. */
+const VIDEO_TYPES = new Set(['video']);
 
 /**
  * @param {string} type
- * @returns {'control'|'presence'|'board'|'avatar'}
+ * @returns {'control'|'presence'|'board'|'avatar'|'video'}
  */
 export function classify(type) {
   if (CONTROL_TYPES.has(type)) return 'control';
   if (PRESENCE_TYPES.has(type)) return 'presence';
   if (AVATAR_TYPES.has(type)) return 'avatar';
+  if (VIDEO_TYPES.has(type)) return 'video';
   return 'board';
 }
 
@@ -53,7 +56,7 @@ const WINDOW_SLOTS = 60;
 const RTT_ALPHA = 0.2;
 
 function emptyTotals() {
-  return { bytes: 0, msgs: 0, control: 0, presence: 0, board: 0, avatar: 0 };
+  return { bytes: 0, msgs: 0, control: 0, presence: 0, board: 0, avatar: 0, video: 0 };
 }
 
 /**
@@ -62,7 +65,7 @@ function emptyTotals() {
 export class NetworkMetrics {
   constructor() {
     this.startedAt = Date.now();
-    /** @type {Map<number, {ub:number, db:number, um:number, dm:number}>} */
+    /** @type {Map<number, {ub:number, db:number, um:number, dm:number, vub:number, vdb:number, vum:number, vdm:number}>} */
     this.slots = new Map();
     /** @type {{sent: ReturnType<typeof emptyTotals>, recv: ReturnType<typeof emptyTotals>}} */
     this.totals = { sent: emptyTotals(), recv: emptyTotals() };
@@ -119,15 +122,22 @@ export class NetworkMetrics {
     this._prune(slot);
 
     let curUb = 0; let curDb = 0; let curUm = 0; let curDm = 0;
+    let curVub = 0; let curVdb = 0; let curVum = 0; let curVdm = 0;
     let peakUb = 0; let peakDb = 0; let peakUm = 0; let peakDm = 0;
+    let peakVub = 0; let peakVdb = 0; let peakVum = 0; let peakVdm = 0;
     for (const [s, b] of this.slots) {
       if (s === slot || s === slot - 1) {
         curUb += b.ub; curDb += b.db; curUm += b.um; curDm += b.dm;
+        curVub += b.vub; curVdb += b.vdb; curVum += b.vum; curVdm += b.vdm;
       }
       if (b.ub > peakUb) peakUb = b.ub;
       if (b.db > peakDb) peakDb = b.db;
       if (b.um > peakUm) peakUm = b.um;
       if (b.dm > peakDm) peakDm = b.dm;
+      if (b.vub > peakVub) peakVub = b.vub;
+      if (b.vdb > peakVdb) peakVdb = b.vdb;
+      if (b.vum > peakVum) peakVum = b.vum;
+      if (b.vdm > peakVdm) peakVdm = b.vdm;
     }
 
     const secs = Math.max(1, (now - this.startedAt) / 1000);
@@ -144,6 +154,14 @@ export class NetworkMetrics {
         downBpsAvg: Math.round(this.totals.recv.bytes / secs),
         peakUpBps: peakUb, peakDownBps: peakDb,
         peakUpMps: peakUm, peakDownMps: peakDm,
+        video: {
+          upBps: curVub, downBps: curVdb,
+          upMps: curVum, downMps: curVdm,
+          upBpsAvg: Math.round(this.totals.sent.video / secs),
+          downBpsAvg: Math.round(this.totals.recv.video / secs),
+          peakUpBps: peakVub, peakDownBps: peakVdb,
+          peakUpMps: peakVum, peakDownMps: peakVdm,
+        },
       },
       rtt: { last: this.rttLast, ema: Math.round(this.rttEma * 10) / 10, samples: this.rttSamples },
       reconnects: this.reconnects,
@@ -167,13 +185,15 @@ export class NetworkMetrics {
     let b = this.slots.get(slot);
     if (!b) {
       this._prune(slot);
-      b = { ub: 0, db: 0, um: 0, dm: 0 };
+      b = { ub: 0, db: 0, um: 0, dm: 0, vub: 0, vdb: 0, vum: 0, vdm: 0 };
       this.slots.set(slot, b);
     }
     if (dir === 'u') {
       b.ub += bytes; b.um += 1;
+      if (cat === 'video') { b.vub += bytes; b.vum += 1; }
     } else {
       b.db += bytes; b.dm += 1;
+      if (cat === 'video') { b.vdb += bytes; b.vdm += 1; }
     }
   }
 

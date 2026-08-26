@@ -286,10 +286,16 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('message', (raw, isBinary) => {
-    // Binary path: avatar pose frames only (see avatar/codec.js). They never
+    // Binary path: avatar pose frames + video frames. They never
     // reset the hello timer — a socket must still say hello to live.
     if (isBinary) {
-      handleAvatarBinary(member, /** @type {Buffer} */ (raw));
+      const buf = /** @type {Buffer} */ (raw);
+      const tag = buf[0];
+      if (tag === AVATAR_TAG || tag === AVATAR_CONFIG_TAG) {
+        handleAvatarBinary(member, buf);
+      } else if (tag === VIDEO_TAG_KEYFRAME || tag === VIDEO_TAG_DELTA || tag === VIDEO_TAG_CONFIG || tag === VIDEO_TAG_KEYFRAME_REQ) {
+        handleVideoBinary(member, buf);
+      }
       return;
     }
     clearTimeout(helloTimer);
@@ -577,6 +583,18 @@ const AVATAR_FRAME_BYTES = 21;  // 0x01 + seq + 3 angles + 16 shapes
 const AVATAR_CONFIG_BYTES = 4;  // 0x03 tag + 3 packed appearance bytes
 const AVATAR_MIN_INTERVAL_MS = 33; // ~30 Hz hard cap per sender (pose frames)
 
+// ---------------------------------------------------------------------------
+// Video binary relay
+// ---------------------------------------------------------------------------
+// Tags mirror public/js/video/encode.js Wire object
+const VIDEO_TAG_KEYFRAME = 0x10;
+const VIDEO_TAG_DELTA = 0x11;
+const VIDEO_TAG_CONFIG = 0x12;
+const VIDEO_TAG_KEYFRAME_REQ = 0x13;
+const VIDEO_RELAY_TAG = 0x20;
+const VIDEO_MAX_FRAME_BYTES = 16 * 1024; // 16 KB max per frame
+const VIDEO_KEYFRAME_MIN_INTERVAL_MS = 500; // max 2 keyframes/sec per sender
+
 /**
  * Validates and relays an avatar frame (pose 0x01 OR appearance config 0x03)
  * to the sender's room peers. Config frames are also persisted on the member
@@ -614,6 +632,54 @@ function handleAvatarBinary(member, buf) {
   out[1] = cidBuf.length;
   cidBuf.copy(out, 2);
   buf.copy(out, 2 + cidBuf.length, 0, expected);
+  broadcastBinary(room, member.id, out);
+}
+
+/**
+ * Validates and relays a video frame (keyframe 0x10, delta 0x11, config 0x12, keyframe_req 0x13)
+ * to the sender's room peers.
+ * @param {Member & {roomRef?: Room, lastVideoKeyframeTs?: number}} member
+ * @param {Buffer} buf
+ */
+function handleVideoBinary(member, buf) {
+  const room = member.roomRef;
+  if (!room) return;
+
+  const tag = buf[0];
+  let isKeyframe = false;
+
+  // Validate tag and basic structure
+  if (tag === VIDEO_TAG_KEYFRAME) {
+    if (buf.length < 14) return; // minimum header
+    isKeyframe = true;
+  } else if (tag === VIDEO_TAG_DELTA) {
+    if (buf.length < 9) return;
+  } else if (tag === VIDEO_TAG_CONFIG) {
+    if (buf.length < 9) return;
+  } else if (tag === VIDEO_TAG_KEYFRAME_REQ) {
+    if (buf.length < 3) return;
+    // Forward keyframe request to sender (target is in payload)
+    // For now, just relay to all peers - they can filter
+  } else {
+    return;
+  }
+
+  if (buf.length > VIDEO_MAX_FRAME_BYTES) return;
+
+  // Rate-limit keyframes
+  if (isKeyframe) {
+    const now = Date.now();
+    if (member.lastVideoKeyframeTs !== undefined && now - member.lastVideoKeyframeTs < VIDEO_KEYFRAME_MIN_INTERVAL_MS) return;
+    member.lastVideoKeyframeTs = now;
+  }
+
+  // Relay: [0x20, cidLen, cid..., full inner frame including its tag byte].
+  const cidBuf = Buffer.from(member.id, 'ascii');
+  const out = Buffer.allocUnsafe(2 + cidBuf.length + buf.length);
+  out[0] = VIDEO_RELAY_TAG;
+  out[1] = cidBuf.length;
+  cidBuf.copy(out, 2);
+  buf.copy(out, 2 + cidBuf.length);
   broadcastBinary(room, member.id, out);
 }
 
