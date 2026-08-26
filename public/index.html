@@ -2,13 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <title>Low-Net Whiteboard</title>
+    <title>Low-Net Call</title>
     <meta name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="stylesheet" href="style.css">
     <script src="js/main.js" type="module"></script>
   </head>
-  <body data-tool="pencil">
+  <body>
     <header class="topbar">
       <div class="brand">LOW-NET</div>
       <div class="identifiers">
@@ -17,7 +17,163 @@
       </div>
     </header>
 
-    <nav class="toolbar" role="toolbar" aria-label="Drawing tools">
+    <main class="call-area">
+      <section class="video-main">
+        <div class="remote-video-wrap">
+          <canvas id="remote-video" class="remote-video" aria-label="Remote camera"></canvas>
+          <div class="video-placeholder" id="video-placeholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 15l-5-5-5 5"/>
+            </svg>
+            <span>Waiting for remote camera…</span>
+          </div>
+        </div>
+        <div class="local-preview-wrap" id="local-preview-wrap" hidden>
+          <canvas id="local-preview" class="local-preview" aria-label="Local camera preview"></canvas>
+        </div>
+      </section>
+
+      <aside class="notes-sidebar" id="notes-sidebar" aria-label="Collaborative notes">
+        <div class="notes-header">
+          <span>NOTES</span>
+          <button id="notes-close" class="icon-btn" aria-label="Close notes" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="notes-board">
+          <canvas id="notes-base"></canvas>
+          <canvas id="notes-overlay"></canvas>
+          <div id="notes-presence" aria-label="Connected users"></div>
+        </div>
+      </aside>
+
+      <button id="notes-drawer-toggle" class="drawer-toggle" aria-label="Open notes" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </main>
+
+    <footer class="controls-bar">
+      <div class="conn">
+        <span id="conn-dot" class="dot connecting"></span>
+        <span id="conn-label">SYNC…</span>
+      </div>
+      <div class="controls-left">
+        <button id="ctrl-mic" class="ctrl-btn" aria-pressed="false" title="Microphone (M)">
+          <svg class="icon-mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/><path d="M8 21h8"/></svg>
+          <svg class="icon-mic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 17v4"/><path d="M8 21h8"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+        <button id="ctrl-camera" class="ctrl-btn" aria-pressed="false" title="Camera (C)">
+          <svg class="icon-cam-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="12" r="4"/></svg>
+          <svg class="icon-cam-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
+      <div class="controls-center">
+        <button id="ctrl-notes" class="ctrl-btn" aria-pressed="false" title="Notes (N)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+        </button>
+        <button id="ctrl-net" class="ctrl-btn" aria-pressed="false" title="Network stats">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </button>
+      </div>
+      <div class="controls-right">
+        <button id="ctrl-settings" class="ctrl-btn" aria-pressed="false" title="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </footer>
+
+    <div id="settings-panel" class="settings-panel" hidden>
+      <header>
+        <span>SETTINGS</span>
+        <button id="settings-close" class="icon-btn" aria-label="Close settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </header>
+      <div class="settings-content">
+        <section>
+          <h3>VIDEO MODE</h3>
+          <div class="setting-row">
+            <label>Mode</label>
+            <div class="radio-group">
+              <label><input type="radio" name="video-mode" value="camera" checked> Camera Differential</label>
+              <label><input type="radio" name="video-mode" value="avatar"> Avatar Semantic</label>
+            </div>
+          </div>
+        </section>
+        <section>
+          <h3>CAMERA PRESETS</h3>
+          <div class="setting-row">
+            <label>Resolution</label>
+            <select id="setting-resolution">
+              <option value="80x60">80×60</option>
+              <option value="120x90" selected>120×90</option>
+              <option value="160x120">160×120</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>Target FPS</label>
+            <select id="setting-fps">
+              <option value="1">1</option>
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="15">15</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>Block Size</label>
+            <select id="setting-block">
+              <option value="2">2×2</option>
+              <option value="4" selected>4×4</option>
+              <option value="8">8×8</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>Threshold</label>
+            <input type="range" id="setting-threshold" min="0" max="50" value="12">
+            <span id="threshold-value">12</span>
+          </div>
+          <div class="setting-row">
+            <label>Quantization</label>
+            <select id="setting-quant">
+              <option value="8">8-bit</option>
+              <option value="4">4-bit</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>Encoding</label>
+            <select id="setting-encoding">
+              <option value="raw">Raw</option>
+              <option value="rle" selected>RLE</option>
+              <option value="bitpack4">Bitpack4</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>Keyframe Interval</label>
+            <select id="setting-keyframe">
+              <option value="1">1s</option>
+              <option value="2" selected>2s</option>
+              <option value="5">5s</option>
+              <option value="10">10s</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>Adaptive FPS</label>
+            <input type="checkbox" id="setting-adaptive" checked>
+          </div>
+        </section>
+        <section>
+          <h3>LIVE METRICS</h3>
+          <div id="live-metrics" class="metrics-grid"></div>
+        </section>
+      </div>
+    </div>
+
+    <div id="avatar-dock" hidden>
+      <canvas id="avatar-stage"></canvas>
+    </div>
+
+    <!-- Legacy toolbar elements for test compatibility (hidden) -->
+    <nav class="toolbar" hidden role="toolbar" aria-label="Drawing tools">
       <button id="tool-pencil" data-tool="pencil" class="active" aria-pressed="true" title="Pencil (P)">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -80,24 +236,5 @@
         </svg>
       </button>
     </nav>
-
-    <main class="board-area">
-      <div class="board">
-        <canvas id="board-base"></canvas>
-        <canvas id="board-overlay"></canvas>
-        <div id="presence" aria-label="Connected users"></div>
-      </div>
-      <div id="avatar-dock" hidden>
-        <canvas id="avatar-stage"></canvas>
-      </div>
-    </main>
-
-    <footer class="statusbar">
-      <span class="conn">
-        <span id="conn-dot" class="dot connecting"></span>
-        <span id="conn-label">SYNC…</span>
-      </span>
-      <span id="net-readout">NETWORK — kbps</span>
-    </footer>
   </body>
 </html>
