@@ -1,7 +1,7 @@
 # NETWORK_PROTOCOL.md — Low-Net Wire Protocol v1
 
 Status: **implemented** (server enforced since Phase 4).
-Transport: WebSocket. JSON text frames are the control plane; binary frames carry avatar poses only (see §8).
+Transport: WebSocket. JSON text frames are the control plane; binary frames carry avatar poses and video frames (see §8, §9).
 
 ---
 
@@ -157,7 +157,106 @@ inspects or stores session state. Glare avoidance is client-side and
 deterministic: on `audio_on`, only the peer with the lexicographically larger
 cid creates an offer. Signaling bandwidth is negligible (~6 kB per pair setup).
 
-## 9. Evolution rules
+## 9. Binary frames (video)
+
+Binary WS frames carry camera-differential video (keyframes, deltas, config).
+All multi-byte values are big-endian. Contract implemented by `public/js/video/encode.js`
+(Wire object) and mirrored inline in `server.js`.
+
+### 9.1 Tag definitions
+
+| Tag | Name | Direction | Description |
+|---|---|---|---|
+| `0x10` | `VIDEO_KEYFRAME` | Client→Server→Peers | Full compressed frame |
+| `0x11` | `VIDEO_DELTA` | Client→Server→Peers | Changed blocks only |
+| `0x12` | `VIDEO_CONFIG` | Client→Server→Peers | Sender capabilities / preset |
+| `0x13` | `VIDEO_KEYFRAME_REQ` | Client→Server→Sender | Request keyframe (optional) |
+| `0x20` | `VIDEO_RELAY` | Server→Peers | Relay envelope (prepended by server) |
+
+### 9.2 Keyframe (0x10) — client → server
+
+```
+Offset  Size  Field
+0       1     tag = 0x10
+1-2     2     seq (u16, big-endian, wraps at 65535)
+3-6     4     timestamp (u32 ms, performance.now() origin)
+7       1     widthBlocks (u8)
+8       1     heightBlocks (u8)
+9       1     blockSize (u8)    — 2, 4, or 8
+10      1     encoding (u8)     — 0=raw, 1=RLE, 2=bitpack4
+11      1     quantization (u8) — 0=8bit, 1=4bit
+12-13   2     payloadLen (u16)
+14...   N     payload (Uint8Array)
+```
+
+Payload encoding per block (row-major): raw bytes, RLE `[runLen,value]...`, or bitpack4 (2 nibbles/byte).
+
+### 9.3 Delta frame (0x11) — client → server
+
+```
+Offset  Size  Field
+0       1     tag = 0x11
+1-2     2     seq (u16)
+3-6     4     timestamp (u32 ms)
+7-8     2     changedCount (u16)
+9...    N     blocks[] (variable)
+```
+
+Per-block entry:
+```
+Offset  Size  Field
+0       1     blockX (u8)
+1       1     blockY (u8)
+2       1     encoding (u8)
+3-4     2     blockLen (u16)
+5...    N     blockData
+```
+
+### 9.4 Config frame (0x12) — client → server
+
+Sent on stream start and when preset changes.
+
+```
+Offset  Size  Field
+0       1     tag = 0x12
+1       1     width (u8)  — 80, 120, 160
+2       1     height (u8) — 60, 90, 120
+3       1     targetFPS (u8) — 1, 5, 10, 15
+4       1     blockSize (u8) — 2, 4, 8
+5       1     threshold (u8) — 0-255
+6       1     keyframeIntervalSec (u8) — 1-10
+7       1     quantization (u8) — 0=8bit, 1=4bit
+8       1     encoding (u8) — 0=raw, 1=RLE, 2=bitpack4
+```
+
+### 9.5 Relay frame (0x20) — server → peers
+
+Server prepends sender CID to the full inner frame (preserving original tag):
+
+```
+Offset  Size  Field
+0       1     tag = 0x20
+1       1     cidLen (u8)
+2..     N     cid (ASCII)
+2+N..   M     inner frame (0x10/0x11/0x12/0x13 with full payload)
+```
+
+### 9.6 Server behavior
+
+- Requires room membership; tag + basic structure validated; max frame size 16 KB.
+- Keyframes rate-limited to one per 500 ms per sender.
+- Never stored, never echoed to sender.
+- Config frames relayed idempotently (no rate-limit).
+- Keyframe requests (0x13) relayed to all peers (sender filters).
+
+### 9.7 Sequence numbers & gap handling
+
+- `seq` increments per frame (keyframe or delta), uint16 wraparound.
+- Receiver tracks `lastSeq`; on gap > 5 or missing keyframe → send `VIDEO_KEYFRAME_REQ` (0x13).
+- Small out-of-order buffer (max 3 frames) for reordering.
+- Keyframe resets decoder state — always processed immediately.
+
+## 10. Evolution rules
 
 - Adding new op types or optional fields = still v1 (unknown types/fields ignored).
 - Changing semantics of existing fields or removing fields = v2, negotiated via `hello`/`err{version}`.
